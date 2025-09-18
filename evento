@@ -1,1 +1,405 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Juego Móvil con Controles Predefinidos</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+            -webkit-user-select: none;
+            user-select: none;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #1a1a2e;
+            overflow: hidden;
+            width: 100vw;
+            height: 100vh;
+            color: #fff;
+            touch-action: none;
+        }
+        
+        #pantalla-completa-container {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            text-align: center;
+            padding: 20px;
+            position: relative;
+        }
+        
+        .titulo {
+            font-size: 28px;
+            margin-bottom: 15px;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
+            color: #e94560;
+        }
+        
+        .subtitulo {
+            font-size: 18px;
+            margin-bottom: 30px;
+            max-width: 300px;
+            color: #b8b8d1;
+        }
+        
+        #btn-pantalla-completa {
+            padding: 16px 32px;
+            font-size: 20px;
+            background-color: #e94560;
+            color: white;
+            border: none;
+            border-radius: 50px;
+            cursor: pointer;
+            box-shadow: 0 6px 12px rgba(0, 0, 0, 0.3);
+            transition: all 0.3s ease;
+            margin-bottom: 20px;
+            font-weight: bold;
+        }
+        
+        #btn-pantalla-completa:hover {
+            background-color: #ff577f;
+            transform: scale(1.05);
+        }
+        
+        #btn-pantalla-completa:active {
+            transform: scale(0.98);
+        }
+        
+        .info-sonido {
+            background-color: rgba(0, 0, 0, 0.3);
+            padding: 15px;
+            border-radius: 10px;
+            max-width: 320px;
+            margin-top: 20px;
+            font-size: 14px;
+            border-left: 4px solid #0f3460;
+        }
+        
+        #juego-container {
+            display: none;
+            width: 100%;
+            height: 100%;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        #lienzo-juego {
+            background: linear-gradient(to bottom, #2c3e50, #4a69bd);
+            width: 100%;
+            height: 100%;
+            display: block;
+            touch-action: none;
+        }
+        
+        .control-btn {
+            position: absolute;
+            border-radius: 50%;
+            background: linear-gradient(145deg, #e94560, #c53d54);
+            border: none;
+            color: white;
+            font-size: 20px;
+            font-weight: bold;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.4);
+            touch-action: none;
+            z-index: 10;
+            transition: transform 0.1s ease;
+        }
+        
+        .control-btn:active {
+            transform: scale(0.95);
+            background: linear-gradient(145deg, #ff577f, #e94560);
+        }
+        
+        #estado-juego {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            background-color: rgba(0, 0, 0, 0.7);
+            padding: 10px 15px;
+            border-radius: 20px;
+            font-size: 14px;
+            z-index: 100;
+        }
+        
+        #cargando {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background-color: rgba(0, 0, 0, 0.8);
+            padding: 20px;
+            border-radius: 10px;
+            text-align: center;
+            z-index: 1000;
+        }
+        
+        .spinner {
+            border: 4px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            border-top: 4px solid #e94560;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 15px;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div id="pantalla-completa-container">
+        <h1 class="titulo">Juego Móvil</h1>
+        <p class="subtitulo">Activa el modo pantalla completa para comenzar a jugar</p>
+        <button id="btn-pantalla-completa">Pantalla Completa</button>
+        
+        <div class="info-sonido">
+            <strong>Controles predefinidos:</strong> El juego utiliza una configuración de controles preestablecida.
+        </div>
+    </div>
+    
+    <div id="juego-container">
+        <canvas id="lienzo-juego"></canvas>
+        
+        <div id="estado-juego">Controles cargados: 0/9</div>
+        
+        <div id="cargando">
+            <div class="spinner"></div>
+            <p>Cargando controles...</p>
+        </div>
+        
+        <!-- Los botones de control se crearán dinámicamente con JavaScript -->
+    </div>
 
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const btnPantallaCompleta = document.getElementById('btn-pantalla-completa');
+            const pantallaCompletaContainer = document.getElementById('pantalla-completa-container');
+            const juegoContainer = document.getElementById('juego-container');
+            const lienzoJuego = document.getElementById('lienzo-juego');
+            const estadoJuego = document.getElementById('estado-juego');
+            const cargando = document.getElementById('cargando');
+            
+            // Variables para el juego
+            let audioContext = null;
+            let controlesConfig = null;
+            let botones = {};
+            
+            // Solicitar pantalla completa
+            btnPantallaCompleta.addEventListener('click', function() {
+                if (document.documentElement.requestFullscreen) {
+                    document.documentElement.requestFullscreen();
+                } else if (document.documentElement.mozRequestFullScreen) {
+                    document.documentElement.mozRequestFullScreen();
+                } else if (document.documentElement.webkitRequestFullscreen) {
+                    document.documentElement.webkitRequestFullscreen();
+                } else if (document.documentElement.msRequestFullscreen) {
+                    document.documentElement.msRequestFullscreen();
+                }
+                
+                // Activar audio al hacer clic
+                activarAudio();
+            });
+            
+            // Evento para cuando se activa el modo pantalla completa
+            document.addEventListener('fullscreenchange', manejarCambioPantallaCompleta);
+            document.addEventListener('webkitfullscreenchange', manejarCambioPantallaCompleta);
+            document.addEventListener('mozfullscreenchange', manejarCambioPantallaCompleta);
+            document.addEventListener('MSFullscreenChange', manejarCambioPantallaCompleta);
+            
+            function manejarCambioPantallaCompleta() {
+                const esPantallaCompleta = document.fullscreenElement || 
+                                          document.webkitFullscreenElement || 
+                                          document.mozFullScreenElement ||
+                                          document.msFullscreenElement;
+                
+                if (esPantallaCompleta) {
+                    pantallaCompletaContainer.style.display = 'none';
+                    juegoContainer.style.display = 'block';
+                    ajustarTamanioCanvas();
+                    
+                    // Cargar la configuración de controles
+                    cargarConfiguracionControles();
+                } else {
+                    pantallaCompletaContainer.style.display = 'flex';
+                    juegoContainer.style.display = 'none';
+                }
+            }
+            
+            function ajustarTamanioCanvas() {
+                lienzoJuego.width = window.innerWidth;
+                lienzoJuego.height = window.innerHeight;
+            }
+            
+            // Ajustar el tamaño del canvas si la ventana cambia de tamaño
+            window.addEventListener('resize', ajustarTamanioCanvas);
+            
+            // Función para activar el sistema de audio
+            function activarAudio() {
+                if (audioContext) return;
+                
+                try {
+                    // Crear el contexto de audio
+                    audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                    console.log("Sistema de audio activado correctamente");
+                } catch (e) {
+                    console.error("Error al activar el audio: ", e);
+                }
+            }
+            
+            // Función para crear un sonido
+            function playSonido(frecuencia, duracion) {
+                if (!audioContext) return;
+                
+                // Crear un oscilador para generar sonido
+                const oscilador = audioContext.createOscillator();
+                const ganancia = audioContext.createGain();
+                
+                // Configurar el oscilador
+                oscilador.type = 'sine';
+                oscilador.frequency.setValueAtTime(frecuencia, audioContext.currentTime);
+                
+                // Configurar la ganancia (volumen)
+                ganancia.gain.setValueAtTime(0.3, audioContext.currentTime);
+                
+                // Conectar los nodos
+                oscilador.connect(ganancia);
+                ganancia.connect(audioContext.destination);
+                
+                // Reproducir el sonido
+                oscilador.start();
+                
+                // Detener después de la duración especificada
+                oscilador.stop(audioContext.currentTime + duracion);
+            }
+            
+            // Cargar configuración de controles desde el JSON
+            async function cargarConfiguracionControles() {
+                try {
+                    cargando.style.display = 'block';
+                    
+                    const respuesta = await fetch('https://raw.githubusercontent.com/papelerio/J/refs/heads/main/Controles.json');
+                    if (!respuesta.ok) {
+                        throw new Error('Error al cargar la configuración de controles');
+                    }
+                    
+                    const datos = await respuesta.json();
+                    controlesConfig = datos.controles;
+                    
+                    // Crear los botones de control
+                    crearBotonesControles();
+                    
+                    // Dibujar el juego
+                    dibujarJuego();
+                    
+                    cargando.style.display = 'none';
+                } catch (error) {
+                    console.error('Error:', error);
+                    cargando.innerHTML = '<p>Error al cargar la configuración de controles</p>';
+                }
+            }
+            
+            // Crear botones de control basados en la configuración
+            function crearBotonesControles() {
+                if (!controlesConfig) return;
+                
+                let controlesCargados = 0;
+                const letras = Object.keys(controlesConfig);
+                
+                letras.forEach(letra => {
+                    const config = controlesConfig[letra];
+                    
+                    // Crear el botón
+                    const boton = document.createElement('button');
+                    boton.className = 'control-btn';
+                    boton.id = `btn-${letra}`;
+                    boton.textContent = letra;
+                    
+                    // Establecer posición y tamaño
+                    boton.style.width = `${config.width}px`;
+                    boton.style.height = `${config.height}px`;
+                    boton.style.left = `${config.x}px`;
+                    boton.style.top = `${config.y}px`;
+                    
+                    // Añadir evento para el botón
+                    boton.addEventListener('click', () => {
+                        // Reproducir sonido al presionar el botón
+                        const frecuencia = 200 + (letra.charCodeAt(0) - 65) * 50;
+                        playSonido(frecuencia, 0.2);
+                        
+                        // Aquí puedes añadir la lógica específica para cada botón
+                        console.log(`Botón ${letra} presionado`);
+                    });
+                    
+                    // Añadir evento táctil para dispositivos móviles
+                    boton.addEventListener('touchstart', (e) => {
+                        e.preventDefault();
+                        const frecuencia = 200 + (letra.charCodeAt(0) - 65) * 50;
+                        playSonido(frecuencia, 0.2);
+                        console.log(`Botón ${letra} presionado (touch)`);
+                    }, { passive: false });
+                    
+                    // Añadir el botón al contenedor del juego
+                    juegoContainer.appendChild(boton);
+                    botones[letra] = boton;
+                    
+                    // Actualizar contador
+                    controlesCargados++;
+                    estadoJuego.textContent = `Controles cargados: ${controlesCargados}/${letras.length}`;
+                });
+            }
+            
+            // Dibujar el juego en el canvas
+            function dibujarJuego() {
+                const contexto = lienzoJuego.getContext('2d');
+                
+                // Limpiar el canvas
+                contexto.fillStyle = '#2c3e50';
+                contexto.fillRect(0, 0, lienzoJuego.width, lienzoJuego.height);
+                
+                // Dibujar una cuadrícula de fondo
+                contexto.strokeStyle = 'rgba(255, 255, 255, 0.1)';
+                contexto.lineWidth = 1;
+                
+                // Líneas verticales
+                for (let x = 0; x < lienzoJuego.width; x += 50) {
+                    contexto.beginPath();
+                    contexto.moveTo(x, 0);
+                    contexto.lineTo(x, lienzoJuego.height);
+                    contexto.stroke();
+                }
+                
+                // Líneas horizontales
+                for (let y = 0; y < lienzoJuego.height; y += 50) {
+                    contexto.beginPath();
+                    contexto.moveTo(0, y);
+                    contexto.lineTo(lienzoJuego.width, y);
+                    contexto.stroke();
+                }
+                
+                // Texto de instrucción
+                contexto.fillStyle = 'white';
+                contexto.font = '20px Arial';
+                contexto.textAlign = 'center';
+                contexto.fillText('¡Juego con controles predefinidos!', lienzoJuego.width/2, 50);
+                contexto.font = '16px Arial';
+                contexto.fillText('Presiona los botones para interactuar', lienzoJuego.width/2, 80);
+            }
+        });
+    </script>
+</body>
+</html>
