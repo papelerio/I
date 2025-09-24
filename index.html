@@ -3,1020 +3,507 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Creador de Spritesheets</title>
+    <title>Editor de Imágenes - Quitafondos</title>
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-        }
-        
         body {
-            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
-            color: #fff;
-            min-height: 100vh;
+            font-family: Arial, sans-serif;
+            margin: 0;
             padding: 20px;
+            background-color: #f4f4f4;
         }
-        
-        .container {
-            max-width: 1200px;
-            margin: 0 auto;
-        }
-        
-        header {
-            text-align: center;
-            margin-bottom: 30px;
-            padding: 20px;
-        }
-        
-        h1 {
-            font-size: 2.5rem;
-            margin-bottom: 10px;
-            color: #e94560;
-            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
-        }
-        
-        .subtitle {
-            font-size: 1.2rem;
-            color: #b8b8d1;
-            max-width: 800px;
-            margin: 0 auto;
-        }
-        
-        .modes {
-            display: flex;
-            justify-content: center;
-            margin-bottom: 30px;
-            gap: 20px;
-        }
-        
-        .mode-btn {
-            padding: 15px 30px;
-            background: #0f3460;
-            border: none;
-            border-radius: 50px;
-            color: white;
-            font-size: 1.1rem;
-            cursor: pointer;
-            transition: all 0.3s;
-            font-weight: bold;
-        }
-        
-        .mode-btn.active {
-            background: #e94560;
-            box-shadow: 0 0 15px rgba(233, 69, 96, 0.5);
-        }
-        
-        .mode-btn:hover {
-            transform: translateY(-3px);
-            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
-        }
-        
-        .mode-content {
-            display: none;
-            background: rgba(255, 255, 255, 0.05);
-            border-radius: 15px;
-            padding: 30px;
-            margin-bottom: 30px;
-            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
-        }
-        
-        .mode-content.active {
-            display: block;
-        }
-        
-        .upload-area {
-            border: 3px dashed #4a69bd;
-            border-radius: 15px;
-            padding: 40px;
-            text-align: center;
-            margin-bottom: 30px;
-            transition: all 0.3s;
-            cursor: pointer;
-        }
-        
-        .upload-area:hover {
-            background: rgba(74, 105, 189, 0.1);
-        }
-        
-        .upload-area.drag-over {
-            background: rgba(74, 105, 189, 0.2);
-            border-color: #e94560;
-        }
-        
-        .upload-icon {
-            font-size: 4rem;
-            margin-bottom: 20px;
-            color: #4a69bd;
-        }
-        
-        .preview-container {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 15px;
-            margin-bottom: 30px;
-        }
-        
-        .preview-item {
+        #canvasContainer {
             position: relative;
-            width: 100px;
-            height: 100px;
-            border: 2px solid #4a69bd;
-            border-radius: 10px;
-            overflow: hidden;
+            display: inline-block;
+            margin: 0 auto 20px;
+            border: 2px solid #333;
         }
-        
-        .preview-item img {
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-        }
-        
-        .remove-btn {
+        #bgCanvas, #canvas {
             position: absolute;
-            top: 5px;
-            right: 5px;
-            background: #e94560;
-            color: white;
-            border: none;
-            border-radius: 50%;
-            width: 25px;
-            height: 25px;
-            cursor: pointer;
-            font-size: 14px;
+            top: 0;
+            left: 0;
         }
-        
-        .controls {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-            gap: 20px;
-            margin-bottom: 30px;
+        #canvas {
+            cursor: default;
         }
-        
-        .control-group {
-            background: rgba(0, 0, 0, 0.2);
-            padding: 20px;
-            border-radius: 10px;
-        }
-        
-        .control-group h3 {
-            margin-bottom: 15px;
-            color: #e94560;
-        }
-        
-        label {
-            display: block;
-            margin-bottom: 8px;
-            font-weight: bold;
-        }
-        
-        input, select {
-            width: 100%;
-            padding: 12px;
-            border: none;
-            border-radius: 8px;
-            background: rgba(255, 255, 255, 0.1);
-            color: white;
-            margin-bottom: 15px;
-        }
-        
-        button {
-            padding: 12px 25px;
-            background: #e94560;
-            color: white;
-            border: none;
-            border-radius: 8px;
-            cursor: pointer;
-            font-weight: bold;
-            transition: all 0.3s;
-            margin-right: 10px;
-            margin-bottom: 10px;
-        }
-        
-        button:hover {
-            background: #ff577f;
-            transform: translateY(-2px);
-        }
-        
-        button.secondary {
-            background: #0f3460;
-        }
-        
-        button.secondary:hover {
-            background: #1b512d;
-        }
-        
-        .preview-canvas {
-            max-width: 100%;
-            border: 2px solid #4a69bd;
-            border-radius: 10px;
-            margin-bottom: 30px;
-            background: rgba(0, 0, 0, 0.2);
-        }
-        
-        .json-output {
-            background: #1e1e1e;
-            color: #d4d4d4;
-            padding: 20px;
-            border-radius: 10px;
-            font-family: monospace;
-            white-space: pre-wrap;
-            max-height: 300px;
-            overflow-y: auto;
-            margin-bottom: 30px;
-        }
-        
-        .animation-list {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
-            gap: 15px;
-            margin-bottom: 30px;
-        }
-        
-        .animation-item {
-            background: rgba(0, 0, 0, 0.2);
-            padding: 15px;
-            border-radius: 10px;
-        }
-        
-        .animation-item h4 {
-            color: #e94560;
-            margin-bottom: 10px;
-        }
-        
-        .frame-preview {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 5px;
-            margin-top: 10px;
-        }
-        
-        .frame {
-            width: 40px;
-            height: 40px;
-            border: 1px solid #4a69bd;
-            border-radius: 5px;
-            overflow: hidden;
-        }
-        
-        .frame img {
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-        }
-        
-        /* Nuevos estilos para el visualizador de animación */
-        .animation-viewer {
-            margin: 30px 0;
-            padding: 20px;
-            background: rgba(0, 0, 0, 0.2);
-            border-radius: 10px;
-        }
-        
-        .animation-viewer h3 {
-            color: #e94560;
-            margin-bottom: 15px;
-            text-align: center;
-        }
-        
-        .animation-container {
+        #tools {
             display: flex;
             flex-direction: column;
             align-items: center;
-            gap: 15px;
-        }
-        
-        .animation-display {
-            width: 150px;
-            height: 150px;
-            border: 2px solid #4a69bd;
-            border-radius: 10px;
-            overflow: hidden;
-            position: relative;
-            background: rgba(0, 0, 0, 0.3);
-        }
-        
-        .animation-canvas {
-            width: 100%;
-            height: 100%;
-        }
-        
-        .animation-controls {
-            display: flex;
-            gap: 10px;
-            align-items: center;
-        }
-        
-        .animation-info {
-            background: rgba(0, 0, 0, 0.3);
-            padding: 8px 15px;
-            border-radius: 20px;
-            font-size: 14px;
-        }
-        
-        footer {
-            text-align: center;
-            margin-top: 50px;
+            background: white;
             padding: 20px;
-            color: #b8b8d1;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            max-width: 300px;
+            margin: 0 auto;
         }
-        
-        @media (max-width: 768px) {
-            .modes {
-                flex-direction: column;
-            }
-            
-            .controls {
-                grid-template-columns: 1fr;
-            }
-            
-            .animation-controls {
-                flex-direction: column;
-            }
+        button {
+            margin: 5px;
+            padding: 10px 15px;
+            background: #007bff;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        button:hover {
+            background: #0056b3;
+        }
+        input[type="range"] {
+            width: 200px;
+            margin: 10px 0;
+        }
+        select {
+            margin: 5px;
+            padding: 5px;
+        }
+        label {
+            margin: 5px 0;
+        }
+        #preview {
+            border: 1px solid #ccc;
+            margin: 5px;
+        }
+        #info {
+            text-align: center;
+            margin-top: 10px;
+            color: #666;
         }
     </style>
 </head>
 <body>
-    <div class="container">
-        <header>
-            <h1>Creador de Spritesheets</h1>
-            <p class="subtitle">Herramienta para crear spritesheets a partir de imágenes individuales o dividir spritesheets existentes y generar su configuración JSON</p>
-        </header>
+    <h1>Editor de Imágenes - Quitafondos (Chroma Key Simple)</h1>
+    <p id="info">Arrastra una imagen al área o usa Ctrl+V para pegar. Haz clic en "Identificar color" y luego en el canvas para seleccionar el color de fondo.</p>
+    
+    <div id="canvasContainer">
+        <canvas id="bgCanvas" width="800" height="600"></canvas>
+        <canvas id="canvas" width="800" height="600"></canvas>
+    </div>
+    
+    <div id="tools">
+        <button id="pickColor">Identificar Color</button>
+        <label>Intensidad: <span id="val">20</span>%</label>
+        <input type="range" id="intensity" min="0" max="100" value="20">
+        <canvas id="preview" width="100" height="75"></canvas>
+        <button id="removeBg">Quitar Fondo</button>
         
-        <div class="modes">
-            <button class="mode-btn active" data-mode="create">Modo 1: Crear Spritesheet</button>
-            <button class="mode-btn" data-mode="divide">Modo 2: Dividir Spritesheet</button>
-        </div>
+        <label>Fondo de visualización:</label>
+        <select id="bgSelect">
+            <option value="white">Blanco</option>
+            <option value="red">Rojo</option>
+            <option value="blue">Azul</option>
+            <option value="green">Verde</option>
+        </select>
         
-        <!-- Modo 1: Crear Spritesheet -->
-        <div id="create-mode" class="mode-content active">
-            <div class="upload-area" id="create-upload">
-                <div class="upload-icon">📁</div>
-                <h2>Arrastra y suelta tus imágenes aquí</h2>
-                <p>o haz clic para seleccionar archivos</p>
-                <input type="file" id="create-input" multiple accept="image/*" style="display: none;">
-            </div>
-            
-            <div class="preview-container" id="create-preview"></div>
-            
-            <div class="controls">
-                <div class="control-group">
-                    <h3>Configuración del Spritesheet</h3>
-                    <label for="rows">Filas:</label>
-                    <input type="number" id="rows" min="1" value="1">
-                    
-                    <label for="columns">Columnas:</label>
-                    <input type="number" id="columns" min="1" value="1">
-                    
-                    <label for="spacing">Espaciado (px):</label>
-                    <input type="number" id="spacing" min="0" value="0">
-                </div>
-                
-                <div class="control-group">
-                    <h3>Configuración de Animación</h3>
-                    <label for="anim-name">Nombre de Animación:</label>
-                    <input type="text" id="anim-name" value="animation">
-                    
-                    <label for="frame-width">Ancho del Frame (px):</label>
-                    <input type="number" id="frame-width" min="1" value="64">
-                    
-                    <label for="frame-height">Alto del Frame (px):</label>
-                    <input type="number" id="frame-height" min="1" value="64">
-                    
-                    <label for="anim-speed">Velocidad (segundos):</label>
-                    <input type="number" id="anim-speed" min="0.01" step="0.01" value="0.2">
-                </div>
-            </div>
-            
-            <button id="generate-sprite">Generar Spritesheet</button>
-            <button id="download-sprite" class="secondary" disabled>Descargar Spritesheet (PNG)</button>
-            
-            <canvas id="sprite-canvas" class="preview-canvas"></canvas>
-            
-            <h3>Configuración JSON</h3>
-            <div class="json-output" id="json-output">// El JSON aparecerá aquí después de generar el spritesheet</div>
-            <button id="download-json" class="secondary" disabled>Descargar JSON</button>
-        </div>
+        <button id="brushBtn">Pincel (Restaurar)</button>
+        <label>Tamaño del pincel: <span id="brushVal">20</span></label>
+        <input type="range" id="brushSize" min="1" max="100" value="20">
         
-        <!-- Modo 2: Dividir Spritesheet -->
-        <div id="divide-mode" class="mode-content">
-            <div class="upload-area" id="divide-upload">
-                <div class="upload-icon">🌐</div>
-                <h2>Arrastra y suelta un spritesheet o ingresa una URL</h2>
-                <p>o haz clic para seleccionar un archivo</p>
-                <input type="file" id="divide-input" accept="image/*" style="display: none;">
-            </div>
-            
-            <div class="controls">
-                <div class="control-group">
-                    <h3>O ingresa una URL</h3>
-                    <label for="sprite-url">URL del Spritesheet:</label>
-                    <input type="url" id="sprite-url" placeholder="https://ejemplo.com/spritesheet.png">
-                    <button id="load-url">Cargar desde URL</button>
-                </div>
-                
-                <div class="control-group">
-                    <h3>Configuración de División</h3>
-                    <label for="divide-width">Ancho del Frame (px):</label>
-                    <input type="number" id="divide-width" min="1" value="64">
-                    
-                    <label for="divide-height">Alto del Frame (px):</label>
-                    <input type="number" id="divide-height" min="1" value="64">
-                    
-                    <label for="divide-offset-x">Offset X (px):</label>
-                    <input type="number" id="divide-offset-x" min="0" value="0">
-                    
-                    <label for="divide-offset-y">Offset Y (px):</label>
-                    <input type="number" id="divide-offset-y" min="0" value="0">
-                    
-                    <label for="divide-spacing">Espaciado (px):</label>
-                    <input type="number" id="divide-spacing" min="0" value="0">
-                </div>
-                
-                <div class="control-group">
-                    <h3>Configuración de Animación</h3>
-                    <label for="divide-anim-name">Nombre de Animación:</label>
-                    <input type="text" id="divide-anim-name" value="animation">
-                    
-                    <label for="divide-anim-speed">Velocidad (segundos):</label>
-                    <input type="number" id="divide-anim-speed" min="0.01" step="0.01" value="0.2">
-                    
-                    <label for="divide-anim-loop">Loop:</label>
-                    <select id="divide-anim-loop">
-                        <option value="true">Sí</option>
-                        <option value="false">No</option>
-                    </select>
-                </div>
-            </div>
-            
-            <button id="divide-sprite">Dividir Spritesheet</button>
-            
-            <canvas id="divide-canvas" class="preview-canvas"></canvas>
-            
-            <!-- Visualizador de Animación (Nuevo) -->
-            <div class="animation-viewer" id="animation-viewer" style="display: none;">
-                <h3>Visualizador de Animación</h3>
-                <div class="animation-container">
-                    <div class="animation-display">
-                        <canvas id="animation-canvas" class="animation-canvas"></canvas>
-                    </div>
-                    <div class="animation-controls">
-                        <button id="play-animation">▶️ Reproducir</button>
-                        <button id="pause-animation">⏸️ Pausar</button>
-                        <button id="stop-animation">⏹️ Detener</button>
-                        <div class="animation-info" id="animation-info">Frame: 0/0</div>
-                    </div>
-                </div>
-            </div>
-            
-            <h3>Animaciones</h3>
-            <div class="animation-list" id="animation-list"></div>
-            
-            <h3>Configuración JSON</h3>
-            <div class="json-output" id="divide-json-output">// El JSON aparecerá aquí después de dividir el spritesheet</div>
-            <button id="download-divide-json" class="secondary" disabled>Descargar JSON</button>
-        </div>
+        <button id="cropBtn">Cortar Cuadrado</button>
         
-        <footer>
-            <p>Herramienta creada para simplificar el desarrollo de juegos - ¡Exporta directamente a tu proyecto!</p>
-        </footer>
+        <button id="undoBtn">Retroceder (Ctrl+Z)</button>
+        <button id="export">Exportar como PNG</button>
     </div>
 
     <script>
-        // Variables globales
-        let currentMode = 'create';
-        let uploadedImages = [];
-        let currentSpriteSheet = null;
-        let dividedFrames = [];
-        let generatedSpriteSheet = null;
-        
-        // Variables para el visualizador de animación
-        let animationPlaying = false;
-        let currentFrame = 0;
-        let animationInterval = null;
-        let animationImages = [];
-        
-        // Cambiar entre modos
-        document.querySelectorAll('.mode-btn').forEach(btn => {
-            btn.addEventListener('click', () => {
-                const mode = btn.dataset.mode;
-                document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
-                document.querySelectorAll('.mode-content').forEach(c => c.classList.remove('active'));
-                
-                btn.classList.add('active');
-                document.getElementById(`${mode}-mode`).classList.add('active');
-                currentMode = mode;
-                
-                // Detener la animación al cambiar de modo
-                stopAnimation();
-            });
-        });
-        
-        // Modo 1: Crear Spritesheet
-        const createUpload = document.getElementById('create-upload');
-        const createInput = document.getElementById('create-input');
-        const createPreview = document.getElementById('create-preview');
-        const generateBtn = document.getElementById('generate-sprite');
-        const downloadSpriteBtn = document.getElementById('download-sprite');
-        const spriteCanvas = document.getElementById('sprite-canvas');
-        const jsonOutput = document.getElementById('json-output');
-        const downloadJsonBtn = document.getElementById('download-json');
-        
-        // Eventos de arrastrar y soltar para el modo crear
-        setupDragAndDrop(createUpload, handleCreateFiles);
-        
-        createUpload.addEventListener('click', () => {
-            createInput.click();
-        });
-        
-        createInput.addEventListener('change', (e) => {
-            handleCreateFiles(e.target.files);
-        });
-        
-        function handleCreateFiles(files) {
-            for (let i = 0; i < files.length; i++) {
-                const file = files[i];
-                if (!file.type.match('image.*')) continue;
-                
-                const reader = new FileReader();
-                reader.onload = (e) => {
-                    uploadedImages.push({
-                        src: e.target.result,
-                        img: null
-                    });
-                    updateCreatePreview();
-                };
-                reader.readAsDataURL(file);
-            }
+        const container = document.getElementById('canvasContainer');
+        const bgCanvas = document.getElementById('bgCanvas');
+        const canvas = document.getElementById('canvas');
+        const bgCtx = bgCanvas.getContext('2d');
+        const ctx = canvas.getContext('2d');
+        const origCanvas = document.createElement('canvas');
+        const origCtx = origCanvas.getContext('2d');
+        const previewEl = document.getElementById('preview');
+        const previewCtx = previewEl.getContext('2d');
+
+        let currentImageData, originalData;
+        let history = [];
+        let currentState = -1;
+        let picking = false;
+        let brushMode = false;
+        let cropMode = false;
+        let selectedColor = { r: 0, g: 0, b: 0 };
+        let intensity = 20;
+        let brushSize = 20;
+        let bgColor = 'white';
+        let painting = false;
+        let isDragging = false;
+        let startX, startY;
+
+        // Configurar tamaño inicial
+        canvas.width = 800;
+        bgCanvas.width = 800;
+        canvas.height = 600;
+        bgCanvas.height = 600;
+        origCanvas.width = 800;
+        origCanvas.height = 600;
+        updateBg();
+
+        function updateBg() {
+            bgCtx.fillStyle = bgColor;
+            bgCtx.fillRect(0, 0, bgCanvas.width, bgCanvas.height);
         }
-        
-        function updateCreatePreview() {
-            createPreview.innerHTML = '';
-            uploadedImages.forEach((imgData, index) => {
-                const div = document.createElement('div');
-                div.className = 'preview-item';
-                div.innerHTML = `
-                    <img src="${imgData.src}" alt="Imagen ${index + 1}">
-                    <button class="remove-btn" data-index="${index}">×</button>
-                `;
-                createPreview.appendChild(div);
-            });
-            
-            // Evento para eliminar imágenes
-            document.querySelectorAll('.remove-btn').forEach(btn => {
-                btn.addEventListener('click', (e) => {
-                    e.stopPropagation();
-                    const index = parseInt(btn.dataset.index);
-                    uploadedImages.splice(index, 1);
-                    updateCreatePreview();
-                });
-            });
-        }
-        
-        // Generar spritesheet
-        generateBtn.addEventListener('click', generateSpriteSheet);
-        
-        function generateSpriteSheet() {
-            if (uploadedImages.length === 0) {
-                alert('Por favor, sube al menos una imagen.');
+
+        function refreshPreview() {
+            if (selectedColor.r === undefined || selectedColor.r === 0 && selectedColor.g === 0 && selectedColor.b === 0) {
+                previewCtx.clearRect(0, 0, 100, 75);
                 return;
             }
-            
-            const rows = parseInt(document.getElementById('rows').value) || 1;
-            const columns = parseInt(document.getElementById('columns').value) || 1;
-            const spacing = parseInt(document.getElementById('spacing').value) || 0;
-            const frameWidth = parseInt(document.getElementById('frame-width').value) || 64;
-            const frameHeight = parseInt(document.getElementById('frame-height').value) || 64;
-            
-            // Calcular dimensiones del canvas
-            const canvasWidth = columns * frameWidth + (columns - 1) * spacing;
-            const canvasHeight = rows * frameHeight + (rows - 1) * spacing;
-            
-            // Configurar canvas
-            const ctx = spriteCanvas.getContext('2d');
-            spriteCanvas.width = canvasWidth;
-            spriteCanvas.height = canvasHeight;
-            
-            // Limpiar canvas
-            ctx.clearRect(0, 0, canvasWidth, canvasHeight);
-            ctx.fillStyle = 'rgba(0, 0, 0, 0)';
-            ctx.fillRect(0, 0, canvasWidth, canvasHeight);
-            
-            // Cargar todas las imágenes y luego dibujarlas
-            let loadedImages = 0;
-            
-            uploadedImages.forEach((imgData, index) => {
-                if (imgData.img) {
-                    loadedImages++;
-                    if (loadedImages === uploadedImages.length) {
-                        drawImagesOnCanvas(ctx, rows, columns, spacing, frameWidth, frameHeight);
-                    }
-                } else {
-                    const img = new Image();
-                    img.onload = function() {
-                        imgData.img = img;
-                        loadedImages++;
-                        if (loadedImages === uploadedImages.length) {
-                            drawImagesOnCanvas(ctx, rows, columns, spacing, frameWidth, frameHeight);
-                        }
+            const tempDataArr = currentImageData.data.slice(0);
+            const threshold = (intensity / 100) * Math.sqrt(3 * 255 * 255);
+            for (let i = 0; i < tempDataArr.length; i += 4) {
+                const r = tempDataArr[i];
+                const g = tempDataArr[i + 1];
+                const b = tempDataArr[i + 2];
+                const dist = Math.sqrt(
+                    Math.pow(r - selectedColor.r, 2) +
+                    Math.pow(g - selectedColor.g, 2) +
+                    Math.pow(b - selectedColor.b, 2)
+                );
+                if (dist <= threshold) {
+                    tempDataArr[i + 3] = 0;
+                }
+            }
+            const tempImageData = new ImageData(tempDataArr, canvas.width, canvas.height);
+            const tempCan = document.createElement('canvas');
+            tempCan.width = canvas.width;
+            tempCan.height = canvas.height;
+            const tctx = tempCan.getContext('2d');
+            tctx.putImageData(tempImageData, 0, 0);
+            previewCtx.fillStyle = bgColor;
+            previewCtx.fillRect(0, 0, 100, 75);
+            previewCtx.drawImage(tempCan, 0, 0, 100, 75);
+        }
+
+        function applyRemoval(data, color, thresh) {
+            for (let i = 0; i < data.length; i += 4) {
+                const r = data[i];
+                const g = data[i + 1];
+                const b = data[i + 2];
+                const dist = Math.sqrt(
+                    Math.pow(r - color.r, 2) +
+                    Math.pow(g - color.g, 2) +
+                    Math.pow(b - color.b, 2)
+                );
+                if (dist <= thresh) {
+                    data[i + 3] = 0;
+                }
+            }
+        }
+
+        function saveState() {
+            const w = canvas.width;
+            const h = canvas.height;
+            const currCopyData = new Uint8ClampedArray(currentImageData.data);
+            const origCopyData = new Uint8ClampedArray(originalData.data);
+            const currCopy = new ImageData(currCopyData, w, h);
+            const origCopy = new ImageData(origCopyData, w, h);
+            history[++currentState] = { w, h, current: currCopy, original: origCopy };
+            while (history.length > currentState + 1) history.pop();
+        }
+
+        function undo() {
+            if (currentState > 0) {
+                const state = history[--currentState];
+                canvas.width = state.w;
+                bgCanvas.width = state.w;
+                canvas.height = state.h;
+                bgCanvas.height = state.h;
+                origCanvas.width = state.w;
+                origCanvas.height = state.h;
+                ctx.putImageData(state.current, 0, 0);
+                originalData = state.original;
+                origCtx.putImageData(originalData, 0, 0);
+                currentImageData = ctx.getImageData(0, 0, state.w, state.h);
+                updateBg();
+                refreshPreview();
+                updateInfo('Acción deshecha.');
+            }
+        }
+
+        function setCursor() {
+            canvas.style.cursor = picking ? 'crosshair' : brushMode ? 'pointer' : cropMode ? 'crosshair' : 'default';
+        }
+
+        function updateInfo(message) {
+            document.getElementById('info').textContent = message;
+        }
+
+        // Manejar pegado (Ctrl+V)
+        document.addEventListener('paste', (e) => {
+            const items = e.clipboardData.items;
+            for (let item of items) {
+                if (item.type.indexOf('image') !== -1) {
+                    const blob = item.getAsFile();
+                    const reader = new FileReader();
+                    reader.onload = (event) => {
+                        const img = new Image();
+                        img.onload = () => {
+                            canvas.width = img.width;
+                            bgCanvas.width = img.width;
+                            canvas.height = img.height;
+                            bgCanvas.height = img.height;
+                            origCanvas.width = img.width;
+                            origCanvas.height = img.height;
+                            ctx.drawImage(img, 0, 0);
+                            currentImageData = ctx.getImageData(0, 0, img.width, img.height);
+                            originalData = new ImageData(currentImageData.data.slice(0), img.width, img.height);
+                            origCtx.putImageData(originalData, 0, 0);
+                            updateBg();
+                            saveState();
+                            updateInfo('Imagen cargada. Selecciona un color para quitar el fondo.');
+                        };
+                        img.src = event.target.result;
                     };
-                    img.onerror = function() {
-                        loadedImages++;
-                        if (loadedImages === uploadedImages.length) {
-                            drawImagesOnCanvas(ctx, rows, columns, spacing, frameWidth, frameHeight);
-                        }
+                    reader.readAsDataURL(blob);
+                    e.preventDefault();
+                    break;
+                }
+            }
+        });
+
+        // Manejar arrastrar y soltar
+        container.addEventListener('dragover', (e) => {
+            e.preventDefault();
+        });
+
+        container.addEventListener('drop', (e) => {
+            e.preventDefault();
+            const files = e.dataTransfer.files;
+            for (let file of files) {
+                if (file.type.startsWith('image/')) {
+                    const reader = new FileReader();
+                    reader.onload = (event) => {
+                        const img = new Image();
+                        img.onload = () => {
+                            canvas.width = img.width;
+                            bgCanvas.width = img.width;
+                            canvas.height = img.height;
+                            bgCanvas.height = img.height;
+                            origCanvas.width = img.width;
+                            origCanvas.height = img.height;
+                            ctx.drawImage(img, 0, 0);
+                            currentImageData = ctx.getImageData(0, 0, img.width, img.height);
+                            originalData = new ImageData(currentImageData.data.slice(0), img.width, img.height);
+                            origCtx.putImageData(originalData, 0, 0);
+                            updateBg();
+                            saveState();
+                            updateInfo('Imagen cargada. Selecciona un color para quitar el fondo.');
+                        };
+                        img.src = event.target.result;
                     };
-                    img.src = imgData.src;
-                }
-            });
-            
-            // Si no hay imágenes, dibujar igualmente
-            if (uploadedImages.length === 0) {
-                drawImagesOnCanvas(ctx, rows, columns, spacing, frameWidth, frameHeight);
-            }
-        }
-        
-        function drawImagesOnCanvas(ctx, rows, columns, spacing, frameWidth, frameHeight) {
-            const canvasWidth = columns * frameWidth + (columns - 1) * spacing;
-            const canvasHeight = rows * frameHeight + (rows - 1) * spacing;
-            
-            // Limpiar canvas
-            ctx.clearRect(0, 0, canvasWidth, canvasHeight);
-            ctx.fillStyle = 'rgba(0, 0, 0, 0)';
-            ctx.fillRect(0, 0, canvasWidth, canvasHeight);
-            
-            // Dibujar imágenes en el canvas
-            let currentImage = 0;
-            for (let y = 0; y < rows; y++) {
-                for (let x = 0; x < columns; x++) {
-                    if (currentImage < uploadedImages.length) {
-                        const imgData = uploadedImages[currentImage];
-                        if (imgData.img) {
-                            ctx.drawImage(
-                                imgData.img, 
-                                x * (frameWidth + spacing), 
-                                y * (frameHeight + spacing), 
-                                frameWidth, 
-                                frameHeight
-                            );
-                        }
-                        currentImage++;
-                    }
+                    reader.readAsDataURL(file);
+                    break;
                 }
             }
-            
-            // Guardar el spritesheet generado
-            generatedSpriteSheet = spriteCanvas.toDataURL('image/png');
-            
-            // Generar JSON
-            generateJsonConfig();
-            
-            // Habilitar botón de descarga
-            downloadSpriteBtn.disabled = false;
-        }
-        
-        function generateJsonConfig() {
-            const animName = document.getElementById('anim-name').value || 'animation';
-            const frameWidth = parseInt(document.getElementById('frame-width').value) || 64;
-            const frameHeight = parseInt(document.getElementById('frame-height').value) || 64;
-            const animSpeed = parseFloat(document.getElementById('anim-speed').value) || 0.2;
-            
-            const jsonConfig = {
-                spriteSheet: "spritesheet.png", // Esto sería reemplazado por la URL real
-                animations: {
-                    [animName]: {
-                        frames: uploadedImages.length,
-                        width: frameWidth,
-                        height: frameHeight,
-                        speed: animSpeed,
-                        loop: true
-                    }
-                }
-            };
-            
-            jsonOutput.textContent = JSON.stringify(jsonConfig, null, 2);
-            downloadJsonBtn.disabled = false;
-        }
-        
-        // Descargar spritesheet
-        downloadSpriteBtn.addEventListener('click', () => {
-            if (!generatedSpriteSheet) {
-                alert('Primero debes generar un spritesheet.');
+        });
+
+        // Herramienta de identificar color
+        document.getElementById('pickColor').addEventListener('click', () => {
+            picking = true;
+            brushMode = false;
+            cropMode = false;
+            setCursor();
+            updateInfo('Haz clic en el canvas para seleccionar el color de fondo.');
+        });
+
+        canvas.addEventListener('click', (e) => {
+            if (!picking) return;
+            const rect = canvas.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            const imageData = ctx.getImageData(x, y, 1, 1);
+            const data = imageData.data;
+            selectedColor = { r: data[0], g: data[1], b: data[2] };
+            picking = false;
+            setCursor();
+            updateInfo(`Color seleccionado: RGB(${selectedColor.r}, ${selectedColor.g}, ${selectedColor.b}). Ajusta la intensidad y quita el fondo.`);
+            refreshPreview();
+        });
+
+        // Barra de intensidad
+        document.getElementById('intensity').addEventListener('input', (e) => {
+            intensity = parseInt(e.target.value);
+            document.getElementById('val').textContent = intensity;
+            refreshPreview();
+        });
+
+        // Quitar fondo
+        document.getElementById('removeBg').addEventListener('click', () => {
+            if (selectedColor.r === 0 && selectedColor.g === 0 && selectedColor.b === 0) {
+                alert('Primero selecciona un color con "Identificar Color".');
                 return;
             }
-            
-            const link = document.createElement('a');
-            link.download = 'spritesheet.png';
-            link.href = generatedSpriteSheet;
-            link.click();
+            saveState();
+            const threshold = (intensity / 100) * Math.sqrt(3 * 255 * 255);
+            applyRemoval(currentImageData.data, selectedColor, threshold);
+            ctx.putImageData(currentImageData, 0, 0);
+            updateInfo('Fondo removido. Usa el pincel para restaurar áreas si es necesario.');
+            refreshPreview();
         });
-        
-        // Descargar JSON
-        downloadJsonBtn.addEventListener('click', () => {
-            const jsonConfig = jsonOutput.textContent;
-            const blob = new Blob([jsonConfig], { type: 'application/json' });
-            const url = URL.createObjectURL(blob);
-            
-            const link = document.createElement('a');
-            link.download = 'animation.json';
-            link.href = url;
-            link.click();
-            
-            URL.revokeObjectURL(url);
+
+        // Fondo de visualización
+        document.getElementById('bgSelect').addEventListener('change', (e) => {
+            bgColor = e.target.value;
+            updateBg();
+            refreshPreview();
         });
-        
-        // Modo 2: Dividir Spritesheet
-        const divideUpload = document.getElementById('divide-upload');
-        const divideInput = document.getElementById('divide-input');
-        const spriteUrl = document.getElementById('sprite-url');
-        const loadUrlBtn = document.getElementById('load-url');
-        const divideBtn = document.getElementById('divide-sprite');
-        const divideCanvas = document.getElementById('divide-canvas');
-        const animationList = document.getElementById('animation-list');
-        const divideJsonOutput = document.getElementById('divide-json-output');
-        const downloadDivideJsonBtn = document.getElementById('download-divide-json');
-        
-        // Elementos del visualizador de animación
-        const animationViewer = document.getElementById('animation-viewer');
-        const animationCanvas = document.getElementById('animation-canvas');
-        const playAnimationBtn = document.getElementById('play-animation');
-        const pauseAnimationBtn = document.getElementById('pause-animation');
-        const stopAnimationBtn = document.getElementById('stop-animation');
-        const animationInfo = document.getElementById('animation-info');
-        
-        let currentSpriteImage = null;
-        
-        // Eventos de arrastrar y soltar para el modo dividir
-        setupDragAndDrop(divideUpload, handleDivideFile);
-        
-        divideUpload.addEventListener('click', () => {
-            divideInput.click();
+
+        // Pincel
+        document.getElementById('brushBtn').addEventListener('click', () => {
+            brushMode = !brushMode;
+            picking = false;
+            cropMode = false;
+            setCursor();
+            updateInfo(brushMode ? 'Pincel activado. Dibuja sobre áreas transparentes para restaurar del original.' : 'Pincel desactivado.');
         });
-        
-        divideInput.addEventListener('change', (e) => {
-            handleDivideFile(e.target.files);
+
+        document.getElementById('brushSize').addEventListener('input', (e) => {
+            brushSize = parseInt(e.target.value);
+            document.getElementById('brushVal').textContent = brushSize;
         });
-        
-        loadUrlBtn.addEventListener('click', () => {
-            const url = spriteUrl.value.trim();
-            if (url) {
-                loadImageFromUrl(url);
-            } else {
-                alert('Por favor, ingresa una URL válida.');
+
+        function paint(e) {
+            const rect = canvas.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            const r = brushSize / 2;
+            ctx.save();
+            ctx.beginPath();
+            ctx.arc(x, y, r, 0, 2 * Math.PI);
+            ctx.clip();
+            ctx.drawImage(origCanvas, 0, 0);
+            ctx.restore();
+            currentImageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        }
+
+        // Cortar cuadrado
+        document.getElementById('cropBtn').addEventListener('click', () => {
+            cropMode = !cropMode;
+            picking = false;
+            brushMode = false;
+            setCursor();
+            updateInfo(cropMode ? 'Arrastra para dibujar un cuadrado y cortar la imagen.' : 'Corte desactivado.');
+        });
+
+        // Eventos del mouse
+        canvas.addEventListener('mousedown', (e) => {
+            const rect = canvas.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            if (brushMode) {
+                painting = true;
+                paint(e);
+            } else if (cropMode) {
+                isDragging = true;
+                startX = x;
+                startY = y;
             }
         });
-        
-        function handleDivideFile(files) {
-            if (files.length > 0) {
-                const file = files[0];
-                if (!file.type.match('image.*')) return;
-                
-                const reader = new FileReader();
-                reader.onload = (e) => {
-                    loadImageFromDataUrl(e.target.result);
-                };
-                reader.readAsDataURL(file);
+
+        canvas.addEventListener('mousemove', (e) => {
+            const rect = canvas.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            if (painting && brushMode) {
+                paint(e);
+            } else if (isDragging && cropMode) {
+                ctx.putImageData(currentImageData, 0, 0);
+                const x1 = Math.min(startX, x);
+                const y1 = Math.min(startY, y);
+                const side = Math.min(Math.abs(x - startX), Math.abs(y - startY));
+                ctx.strokeStyle = 'red';
+                ctx.lineWidth = 2;
+                ctx.setLineDash([5, 5]);
+                ctx.strokeRect(x1, y1, side, side);
             }
-        }
-        
-        function loadImageFromUrl(url) {
-            const img = new Image();
-            img.crossOrigin = "Anonymous";
-            img.onload = () => {
-                currentSpriteImage = img;
-                drawDividePreview();
-            };
-            img.onerror = () => {
-                alert('Error al cargar la imagen desde la URL. Asegúrate de que la URL sea válida y accesible.');
-            };
-            img.src = url;
-        }
-        
-        function loadImageFromDataUrl(dataUrl) {
-            const img = new Image();
-            img.onload = () => {
-                currentSpriteImage = img;
-                drawDividePreview();
-            };
-            img.src = dataUrl;
-        }
-        
-        function drawDividePreview() {
-            if (!currentSpriteImage) return;
-            
-            const ctx = divideCanvas.getContext('2d');
-            divideCanvas.width = currentSpriteImage.width;
-            divideCanvas.height = currentSpriteImage.height;
-            
-            ctx.clearRect(0, 0, divideCanvas.width, divideCanvas.height);
-            ctx.drawImage(currentSpriteImage, 0, 0);
-        }
-        
-        // Dividir spritesheet
-        divideBtn.addEventListener('click', divideSpriteSheet);
-        
-        function divideSpriteSheet() {
-            if (!currentSpriteImage) {
-                alert('Por favor, carga un spritesheet primero.');
-                return;
-            }
-            
-            const frameWidth = parseInt(document.getElementById('divide-width').value) || 64;
-            const frameHeight = parseInt(document.getElementById('divide-height').value) || 64;
-            const offsetX = parseInt(document.getElementById('divide-offset-x').value) || 0;
-            const offsetY = parseInt(document.getElementById('divide-offset-y').value) || 0;
-            const spacing = parseInt(document.getElementById('divide-spacing').value) || 0;
-            
-            const cols = Math.floor((currentSpriteImage.width - offsetX + spacing) / (frameWidth + spacing));
-            const rows = Math.floor((currentSpriteImage.height - offsetY + spacing) / (frameHeight + spacing));
-            
-            dividedFrames = [];
-            animationImages = [];
-            
-            for (let y = 0; y < rows; y++) {
-                for (let x = 0; x < cols; x++) {
-                    const canvas = document.createElement('canvas');
-                    canvas.width = frameWidth;
-                    canvas.height = frameHeight;
-                    const ctx = canvas.getContext('2d');
-                    
-                    const sx = offsetX + x * (frameWidth + spacing);
-                    const sy = offsetY + y * (frameHeight + spacing);
-                    
-                    ctx.drawImage(
-                        currentSpriteImage,
-                        sx, sy, frameWidth, frameHeight,
-                        0, 0, frameWidth, frameHeight
-                    );
-                    
-                    const frameDataUrl = canvas.toDataURL('image/png');
-                    dividedFrames.push(frameDataUrl);
-                    
-                    // Crear imagen para la animación
-                    const img = new Image();
-                    img.src = frameDataUrl;
-                    animationImages.push(img);
-                }
-            }
-            
-            updateAnimationList();
-            generateDivideJsonConfig();
-            downloadDivideJsonBtn.disabled = false;
-            
-            // Mostrar el visualizador de animación
-            animationViewer.style.display = 'block';
-            
-            // Configurar el canvas de animación
-            const animCtx = animationCanvas.getContext('2d');
-            animationCanvas.width = frameWidth;
-            animationCanvas.height = frameHeight;
-            
-            // Dibujar el primer frame
-            if (animationImages.length > 0) {
-                animCtx.clearRect(0, 0, frameWidth, frameHeight);
-                animCtx.drawImage(animationImages[0], 0, 0);
-                updateAnimationInfo();
-            }
-            
-            // Detener cualquier animación previa
-            stopAnimation();
-        }
-        
-        // Controles del visualizador de animación
-        playAnimationBtn.addEventListener('click', playAnimation);
-        pauseAnimationBtn.addEventListener('click', pauseAnimation);
-        stopAnimationBtn.addEventListener('click', stopAnimation);
-        
-        function playAnimation() {
-            if (animationPlaying || animationImages.length === 0) return;
-            
-            const animSpeed = parseFloat(document.getElementById('divide-anim-speed').value) || 0.2;
-            const animLoop = document.getElementById('divide-anim-loop').value === 'true';
-            
-            animationPlaying = true;
-            const animCtx = animationCanvas.getContext('2d');
-            
-            animationInterval = setInterval(() => {
-                currentFrame = (currentFrame + 1) % animationImages.length;
-                
-                // Si no es loop y llegamos al final, detener
-                if (!animLoop && currentFrame === 0) {
-                    stopAnimation();
+        });
+
+        canvas.addEventListener('mouseup', (e) => {
+            const rect = canvas.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            if (painting && brushMode) {
+                painting = false;
+                saveState();
+                updateInfo('Área restaurada.');
+            } else if (isDragging && cropMode) {
+                ctx.putImageData(currentImageData, 0, 0); // Remover rect
+                const x1 = Math.min(startX, x);
+                const y1 = Math.min(startY, y);
+                const side = Math.min(Math.abs(x - startX), Math.abs(y - startY));
+                if (side < 10) {
+                    isDragging = false;
                     return;
                 }
-                
-                animCtx.clearRect(0, 0, animationCanvas.width, animationCanvas.height);
-                animCtx.drawImage(animationImages[currentFrame], 0, 0);
-                updateAnimationInfo();
-            }, animSpeed * 1000);
-        }
-        
-        function pauseAnimation() {
-            if (!animationPlaying) return;
-            
-            clearInterval(animationInterval);
-            animationPlaying = false;
-        }
-        
-        function stopAnimation() {
-            clearInterval(animationInterval);
-            animationPlaying = false;
-            currentFrame = 0;
-            
-            if (animationImages.length > 0) {
-                const animCtx = animationCanvas.getContext('2d');
-                animCtx.clearRect(0, 0, animationCanvas.width, animationCanvas.height);
-                animCtx.drawImage(animationImages[0], 0, 0);
-                updateAnimationInfo();
-            }
-        }
-        
-        function updateAnimationInfo() {
-            animationInfo.textContent = `Frame: ${currentFrame + 1}/${animationImages.length}`;
-        }
-        
-        function updateAnimationList() {
-            animationList.innerHTML = '';
-            
-            const animName = document.getElementById('divide-anim-name').value || 'animation';
-            const animSpeed = parseFloat(document.getElementById('divide-anim-speed').value) || 0.2;
-            const animLoop = document.getElementById('divide-anim-loop').value === 'true';
-            
-            const animItem = document.createElement('div');
-            animItem.className = 'animation-item';
-            animItem.innerHTML = `
-                <h4>${animName}</h4>
-                <p>Frames: ${dividedFrames.length}</p>
-                <p>Velocidad: ${animSpeed}s</p>
-                <p>Loop: ${animLoop ? 'Sí' : 'No'}</p>
-                <div class="frame-preview">
-                    ${dividedFrames.slice(0, 10).map((frame, i) => `
-                        <div class="frame">
-                            <img src="${frame}" alt="Frame ${i + 1}">
-                        </div>
-                    `).join('')}
-                    ${dividedFrames.length > 10 ? `<div>+${dividedFrames.length - 10} más</div>` : ''}
-                </div>
-            `;
-            
-            animationList.appendChild(animItem);
-        }
-        
-        function generateDivideJsonConfig() {
-            const animName = document.getElementById('divide-anim-name').value || 'animation';
-            const frameWidth = parseInt(document.getElementById('divide-width').value) || 64;
-            const frameHeight = parseInt(document.getElementById('divide-height').value) || 64;
-            const animSpeed = parseFloat(document.getElementById('divide-anim-speed').value) || 0.2;
-            const animLoop = document.getElementById('divide-anim-loop').value === 'true';
-            
-            const jsonConfig = {
-                spriteSheet: currentSpriteImage.src || "spritesheet.png",
-                animations: {
-                    [animName]: {
-                        frames: dividedFrames.length,
-                        width: frameWidth,
-                        height: frameHeight,
-                        speed: animSpeed,
-                        loop: animLoop
+                const cropWidth = side;
+                const cropHeight = side;
+                const cropX = Math.floor(x1);
+                const cropY = Math.floor(y1);
+                const newCurrentData = new ImageData(cropWidth, cropHeight);
+                const newOriginalData = new ImageData(cropWidth, cropHeight);
+                for (let dy = 0; dy < cropHeight; dy++) {
+                    for (let dx = 0; dx < cropWidth; dx++) {
+                        const srcX = cropX + dx;
+                        const srcY = cropY + dy;
+                        const dstIdx = (dy * cropWidth + dx) * 4;
+                        if (srcX >= 0 && srcX < canvas.width && srcY >= 0 && srcY < canvas.height) {
+                            const srcIdx = (srcY * canvas.width + srcX) * 4;
+                            newCurrentData.data[dstIdx] = currentImageData.data[srcIdx];
+                            newCurrentData.data[dstIdx + 1] = currentImageData.data[srcIdx + 1];
+                            newCurrentData.data[dstIdx + 2] = currentImageData.data[srcIdx + 2];
+                            newCurrentData.data[dstIdx + 3] = currentImageData.data[srcIdx + 3];
+                            newOriginalData.data[dstIdx] = originalData.data[srcIdx];
+                            newOriginalData.data[dstIdx + 1] = originalData.data[srcIdx + 1];
+                            newOriginalData.data[dstIdx + 2] = originalData.data[srcIdx + 2];
+                            newOriginalData.data[dstIdx + 3] = originalData.data[srcIdx + 3];
+                        } else {
+                            newCurrentData.data[dstIdx + 3] = 0;
+                            newOriginalData.data[dstIdx + 3] = 0;
+                        }
                     }
                 }
-            };
-            
-            divideJsonOutput.textContent = JSON.stringify(jsonConfig, null, 2);
-        }
-        
-        // Descargar JSON del modo dividir
-        downloadDivideJsonBtn.addEventListener('click', () => {
-            const jsonConfig = divideJsonOutput.textContent;
-            const blob = new Blob([jsonConfig], { type: 'application/json' });
-            const url = URL.createObjectURL(blob);
-            
-            const link = document.createElement('a');
-            link.download = 'animation.json';
-            link.href = url;
-            link.click();
-            
-            URL.revokeObjectURL(url);
+                canvas.width = cropWidth;
+                bgCanvas.width = cropWidth;
+                canvas.height = cropHeight;
+                bgCanvas.height = cropHeight;
+                origCanvas.width = cropWidth;
+                origCanvas.height = cropHeight;
+                currentImageData = newCurrentData;
+                originalData = newOriginalData;
+                origCtx.putImageData(originalData, 0, 0);
+                ctx.putImageData(currentImageData, 0, 0);
+                updateBg();
+                saveState();
+                refreshPreview();
+                updateInfo('Imagen cortada al cuadrado seleccionado.');
+                isDragging = false;
+            }
         });
-        
-        // Función auxiliar para drag and drop
-        function setupDragAndDrop(element, callback) {
-            element.addEventListener('dragover', (e) => {
-                e.preventDefault();
-                element.classList.add('drag-over');
-            });
-            
-            element.addEventListener('dragleave', () => {
-                element.classList.remove('drag-over');
-            });
-            
-            element.addEventListener('drop', (e) => {
-                e.preventDefault();
-                element.classList.remove('drag-over');
-                callback(e.dataTransfer.files);
-            });
-        }
+
+        // Undo
+        document.getElementById('undoBtn').addEventListener('click', undo);
+        document.addEventListener('keydown', (e) => {
+            if (e.ctrlKey && e.key === 'z' && !e.repeat) {
+                undo();
+            }
+        });
+
+        // Exportar como PNG
+        document.getElementById('export').addEventListener('click', () => {
+            const temp = document.createElement('canvas');
+            temp.width = canvas.width;
+            temp.height = canvas.height;
+            const tctx = temp.getContext('2d');
+            tctx.putImageData(currentImageData, 0, 0);
+            const link = document.createElement('a');
+            link.download = 'imagen_sin_fondo.png';
+            link.href = temp.toDataURL('image/png');
+            link.click();
+            updateInfo('Imagen exportada como PNG con transparencia.');
+        });
+
+        // Inicial
+        updateInfo('Carga una imagen para comenzar.');
     </script>
 </body>
 </html>
