@@ -10,12 +10,21 @@
             margin: 0;
             padding: 20px;
             background-color: #f4f4f4;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        #mainContainer {
+            display: flex;
+            width: 100%;
+            max-width: 1400px;
+            gap: 20px;
         }
         #canvasContainer {
+            flex: 1;
             position: relative;
-            display: inline-block;
-            margin: 0 auto 20px;
             border: 2px solid #333;
+            max-width: 800px;
         }
         #bgCanvas, #canvas {
             position: absolute;
@@ -26,19 +35,17 @@
             cursor: default;
         }
         #tools {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
             background: white;
             padding: 20px;
             border-radius: 8px;
             box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-            max-width: 300px;
-            margin: 0 auto;
+            width: 280px;
+            display: flex;
+            flex-direction: column;
         }
         button {
-            margin: 5px;
-            padding: 10px 15px;
+            margin: 5px 0;
+            padding: 10px;
             background: #007bff;
             color: white;
             border: none;
@@ -49,60 +56,70 @@
             background: #0056b3;
         }
         input[type="range"] {
-            width: 200px;
-            margin: 10px 0;
+            width: 100%;
+            margin: 5px 0;
         }
         select {
-            margin: 5px;
-            padding: 5px;
+            margin: 5px 0;
+            padding: 8px;
         }
         label {
             margin: 5px 0;
+            font-size: 14px;
         }
         #preview {
             border: 1px solid #ccc;
-            margin: 5px;
+            margin: 5px 0;
+            display: block;
         }
         #info {
             text-align: center;
             margin-top: 10px;
             color: #666;
+            width: 100%;
+        }
+        h1 {
+            width: 100%;
+            text-align: center;
         }
     </style>
 </head>
 <body>
     <h1>Editor de Imágenes - Quitafondos (Chroma Key Simple)</h1>
+    
+    <div id="mainContainer">
+        <div id="canvasContainer">
+            <canvas id="bgCanvas" width="800" height="600"></canvas>
+            <canvas id="canvas" width="800" height="600"></canvas>
+        </div>
+        
+        <div id="tools">
+            <button id="pickColor">Identificar Color</button>
+            <label>Intensidad: <span id="val">20</span>%</label>
+            <input type="range" id="intensity" min="0" max="100" value="20">
+            <canvas id="preview" width="250" height="188"></canvas>
+            <button id="removeBg">Quitar Fondo</button>
+            
+            <label>Fondo de visualización:</label>
+            <select id="bgSelect">
+                <option value="white">Blanco</option>
+                <option value="red">Rojo</option>
+                <option value="blue">Azul</option>
+                <option value="green">Verde</option>
+            </select>
+            
+            <button id="brushBtn">Pincel (Restaurar)</button>
+            <label>Tamaño del pincel: <span id="brushVal">20</span></label>
+            <input type="range" id="brushSize" min="1" max="100" value="20">
+            
+            <button id="cropBtn">Cortar Rectángulo</button>
+            
+            <button id="undoBtn">Retroceder (Ctrl+Z)</button>
+            <button id="export">Exportar como PNG</button>
+        </div>
+    </div>
+    
     <p id="info">Arrastra una imagen al área o usa Ctrl+V para pegar. Haz clic en "Identificar color" y luego en el canvas para seleccionar el color de fondo.</p>
-    
-    <div id="canvasContainer">
-        <canvas id="bgCanvas" width="800" height="600"></canvas>
-        <canvas id="canvas" width="800" height="600"></canvas>
-    </div>
-    
-    <div id="tools">
-        <button id="pickColor">Identificar Color</button>
-        <label>Intensidad: <span id="val">20</span>%</label>
-        <input type="range" id="intensity" min="0" max="100" value="20">
-        <canvas id="preview" width="100" height="75"></canvas>
-        <button id="removeBg">Quitar Fondo</button>
-        
-        <label>Fondo de visualización:</label>
-        <select id="bgSelect">
-            <option value="white">Blanco</option>
-            <option value="red">Rojo</option>
-            <option value="blue">Azul</option>
-            <option value="green">Verde</option>
-        </select>
-        
-        <button id="brushBtn">Pincel (Restaurar)</button>
-        <label>Tamaño del pincel: <span id="brushVal">20</span></label>
-        <input type="range" id="brushSize" min="1" max="100" value="20">
-        
-        <button id="cropBtn">Cortar Cuadrado</button>
-        
-        <button id="undoBtn">Retroceder (Ctrl+Z)</button>
-        <button id="export">Exportar como PNG</button>
-    </div>
 
     <script>
         const container = document.getElementById('canvasContainer');
@@ -145,7 +162,7 @@
 
         function refreshPreview() {
             if (selectedColor.r === undefined || selectedColor.r === 0 && selectedColor.g === 0 && selectedColor.b === 0) {
-                previewCtx.clearRect(0, 0, 100, 75);
+                previewCtx.clearRect(0, 0, 250, 188);
                 return;
             }
             const tempDataArr = currentImageData.data.slice(0);
@@ -170,8 +187,8 @@
             const tctx = tempCan.getContext('2d');
             tctx.putImageData(tempImageData, 0, 0);
             previewCtx.fillStyle = bgColor;
-            previewCtx.fillRect(0, 0, 100, 75);
-            previewCtx.drawImage(tempCan, 0, 0, 100, 75);
+            previewCtx.fillRect(0, 0, 250, 188);
+            previewCtx.drawImage(tempCan, 0, 0, 250, 188);
         }
 
         function applyRemoval(data, color, thresh) {
@@ -376,13 +393,13 @@
             currentImageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
         }
 
-        // Cortar cuadrado
+        // Cortar rectángulo
         document.getElementById('cropBtn').addEventListener('click', () => {
             cropMode = !cropMode;
             picking = false;
             brushMode = false;
             setCursor();
-            updateInfo(cropMode ? 'Arrastra para dibujar un cuadrado y cortar la imagen.' : 'Corte desactivado.');
+            updateInfo(cropMode ? 'Arrastra para dibujar un rectángulo y cortar la imagen.' : 'Corte desactivado.');
         });
 
         // Eventos del mouse
@@ -410,11 +427,12 @@
                 ctx.putImageData(currentImageData, 0, 0);
                 const x1 = Math.min(startX, x);
                 const y1 = Math.min(startY, y);
-                const side = Math.min(Math.abs(x - startX), Math.abs(y - startY));
+                const width = Math.abs(x - startX);
+                const height = Math.abs(y - startY);
                 ctx.strokeStyle = 'red';
                 ctx.lineWidth = 2;
                 ctx.setLineDash([5, 5]);
-                ctx.strokeRect(x1, y1, side, side);
+                ctx.strokeRect(x1, y1, width, height);
             }
         });
 
@@ -430,13 +448,12 @@
                 ctx.putImageData(currentImageData, 0, 0); // Remover rect
                 const x1 = Math.min(startX, x);
                 const y1 = Math.min(startY, y);
-                const side = Math.min(Math.abs(x - startX), Math.abs(y - startY));
-                if (side < 10) {
+                const cropWidth = Math.abs(x - startX);
+                const cropHeight = Math.abs(y - startY);
+                if (cropWidth < 10 || cropHeight < 10) {
                     isDragging = false;
                     return;
                 }
-                const cropWidth = side;
-                const cropHeight = side;
                 const cropX = Math.floor(x1);
                 const cropY = Math.floor(y1);
                 const newCurrentData = new ImageData(cropWidth, cropHeight);
@@ -475,7 +492,7 @@
                 updateBg();
                 saveState();
                 refreshPreview();
-                updateInfo('Imagen cortada al cuadrado seleccionado.');
+                updateInfo('Imagen cortada al rectángulo seleccionado.');
                 isDragging = false;
             }
         });
