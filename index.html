@@ -25,6 +25,8 @@
             position: relative;
             border: 2px solid #333;
             max-width: 800px;
+            max-height: 600px;
+            overflow: auto; /* Para scroll si es necesario, pero con escalado no debería */
         }
         #bgCanvas, #canvas {
             position: absolute;
@@ -115,7 +117,8 @@
             <button id="cropBtn">Cortar Rectángulo</button>
             
             <button id="undoBtn">Retroceder (Ctrl+Z)</button>
-            <button id="export">Exportar como PNG</button>
+            <button id="copyBtn">Copiar PNG</button>
+            <button id="export">Descargar PNG</button>
         </div>
     </div>
     
@@ -146,6 +149,10 @@
         let isDragging = false;
         let startX, startY;
 
+        // Tamaños máximos para visualización
+        const MAX_WIDTH = 800;
+        const MAX_HEIGHT = 600;
+
         // Configurar tamaño inicial
         canvas.width = 800;
         bgCanvas.width = 800;
@@ -153,11 +160,38 @@
         bgCanvas.height = 600;
         origCanvas.width = 800;
         origCanvas.height = 600;
+        applyScaling();
         updateBg();
+
+        function applyScaling() {
+            const scaleW = Math.min(MAX_WIDTH / canvas.width, 1);
+            const scaleH = Math.min(MAX_HEIGHT / canvas.height, 1);
+            const scale = Math.min(scaleW, scaleH);
+            const displayWidth = canvas.width * scale;
+            const displayHeight = canvas.height * scale;
+
+            canvas.style.width = displayWidth + 'px';
+            canvas.style.height = displayHeight + 'px';
+            bgCanvas.style.width = displayWidth + 'px';
+            bgCanvas.style.height = displayHeight + 'px';
+
+            if (scale < 1) {
+                updateInfo('Imagen escalada para visualización. Edición en resolución completa.');
+            }
+        }
 
         function updateBg() {
             bgCtx.fillStyle = bgColor;
             bgCtx.fillRect(0, 0, bgCanvas.width, bgCanvas.height);
+        }
+
+        function getRealCoords(e) {
+            const rect = canvas.getBoundingClientRect();
+            const displayScaleX = canvas.width / rect.width;
+            const displayScaleY = canvas.height / rect.height;
+            const x = (e.clientX - rect.left) * displayScaleX;
+            const y = (e.clientY - rect.top) * displayScaleY;
+            return { x: Math.floor(x), y: Math.floor(y) };
         }
 
         function refreshPreview() {
@@ -232,6 +266,7 @@
                 origCtx.putImageData(originalData, 0, 0);
                 currentImageData = ctx.getImageData(0, 0, state.w, state.h);
                 updateBg();
+                applyScaling();
                 refreshPreview();
                 updateInfo('Acción deshecha.');
             }
@@ -266,6 +301,7 @@
                             originalData = new ImageData(currentImageData.data.slice(0), img.width, img.height);
                             origCtx.putImageData(originalData, 0, 0);
                             updateBg();
+                            applyScaling();
                             saveState();
                             updateInfo('Imagen cargada. Selecciona un color para quitar el fondo.');
                         };
@@ -303,6 +339,7 @@
                             originalData = new ImageData(currentImageData.data.slice(0), img.width, img.height);
                             origCtx.putImageData(originalData, 0, 0);
                             updateBg();
+                            applyScaling();
                             saveState();
                             updateInfo('Imagen cargada. Selecciona un color para quitar el fondo.');
                         };
@@ -325,9 +362,7 @@
 
         canvas.addEventListener('click', (e) => {
             if (!picking) return;
-            const rect = canvas.getBoundingClientRect();
-            const x = e.clientX - rect.left;
-            const y = e.clientY - rect.top;
+            const { x, y } = getRealCoords(e);
             const imageData = ctx.getImageData(x, y, 1, 1);
             const data = imageData.data;
             selectedColor = { r: data[0], g: data[1], b: data[2] };
@@ -380,9 +415,7 @@
         });
 
         function paint(e) {
-            const rect = canvas.getBoundingClientRect();
-            const x = e.clientX - rect.left;
-            const y = e.clientY - rect.top;
+            const { x, y } = getRealCoords(e);
             const r = brushSize / 2;
             ctx.save();
             ctx.beginPath();
@@ -404,9 +437,7 @@
 
         // Eventos del mouse
         canvas.addEventListener('mousedown', (e) => {
-            const rect = canvas.getBoundingClientRect();
-            const x = e.clientX - rect.left;
-            const y = e.clientY - rect.top;
+            const { x, y } = getRealCoords(e);
             if (brushMode) {
                 painting = true;
                 paint(e);
@@ -418,9 +449,7 @@
         });
 
         canvas.addEventListener('mousemove', (e) => {
-            const rect = canvas.getBoundingClientRect();
-            const x = e.clientX - rect.left;
-            const y = e.clientY - rect.top;
+            const { x, y } = getRealCoords(e);
             if (painting && brushMode) {
                 paint(e);
             } else if (isDragging && cropMode) {
@@ -437,9 +466,7 @@
         });
 
         canvas.addEventListener('mouseup', (e) => {
-            const rect = canvas.getBoundingClientRect();
-            const x = e.clientX - rect.left;
-            const y = e.clientY - rect.top;
+            const { x, y } = getRealCoords(e);
             if (painting && brushMode) {
                 painting = false;
                 saveState();
@@ -490,6 +517,7 @@
                 origCtx.putImageData(originalData, 0, 0);
                 ctx.putImageData(currentImageData, 0, 0);
                 updateBg();
+                applyScaling();
                 saveState();
                 refreshPreview();
                 updateInfo('Imagen cortada al rectángulo seleccionado.');
@@ -505,6 +533,26 @@
             }
         });
 
+        // Copiar PNG al portapapeles
+        document.getElementById('copyBtn').addEventListener('click', () => {
+            const temp = document.createElement('canvas');
+            temp.width = canvas.width;
+            temp.height = canvas.height;
+            const tctx = temp.getContext('2d');
+            tctx.putImageData(currentImageData, 0, 0);
+            temp.toBlob((blob) => {
+                if (navigator.clipboard && navigator.clipboard.write) {
+                    navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]).then(() => {
+                        updateInfo('Imagen copiada al portapapeles en tamaño original.');
+                    }).catch(() => {
+                        updateInfo('Error al copiar. Intenta descargar en su lugar.');
+                    });
+                } else {
+                    updateInfo('Tu navegador no soporta copiar imágenes al portapapeles. Usa descargar.');
+                }
+            }, 'image/png');
+        });
+
         // Exportar como PNG
         document.getElementById('export').addEventListener('click', () => {
             const temp = document.createElement('canvas');
@@ -516,7 +564,7 @@
             link.download = 'imagen_sin_fondo.png';
             link.href = temp.toDataURL('image/png');
             link.click();
-            updateInfo('Imagen exportada como PNG con transparencia.');
+            updateInfo('Imagen descargada como PNG con transparencia en tamaño original.');
         });
 
         // Inicial
