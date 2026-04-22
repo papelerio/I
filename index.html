@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Illustrador Digital Pro</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600&display=swap" rel="stylesheet">
+</head>
+
+<body>
+    <!-- Menú Inicial de Configuración -->
+    <div id="startup-modal" class="modal-overlay">
+        <div class="modal-content">
+            <h1>Bienvenido a Pro Illustrator</h1>
+            <p>Configura tu espacio de trabajo</p>
+
+            <div class="setup-group">
+                <div class="input-field">
+                    <label>Ancho (px)</label>
+                    <input type="number" id="canvas-width" value="1920">
+                </div>
+                <div class="input-field">
+                    <label>Alto (px)</label>
+                    <input type="number" id="canvas-height" value="1080">
+                </div>
+            </div>
+
+            <div class="setup-actions">
+                <button id="create-btn" class="primary-btn">Crear lienzo en blanco</button>
+                <div class="divider">o</div>
+                <button id="import-btn" class="secondary-btn">Importar imagen</button>
+                <input type="file" id="file-input" accept="image/*" class="hidden">
+            </div>
+        </div>
+    </div>
+
+    <!-- Resize Canvas Modal -->
+    <div id="resize-modal" class="modal-overlay" style="display:none;">
+        <div class="modal-content">
+            <h1>Cambiar tamaño del lienzo</h1>
+            <p>El contenido existente se preservará</p>
+            <div class="setup-group">
+                <div class="input-field">
+                    <label>Ancho (px)</label>
+                    <input type="number" id="resize-width" min="1" max="8000">
+                </div>
+                <div class="input-field">
+                    <label>Alto (px)</label>
+                    <input type="number" id="resize-height" min="1" max="8000">
+                </div>
+            </div>
+            <div class="setup-group" style="flex-direction:column; gap:8px; margin-top:8px;">
+                <label style="font-size:11px; font-weight:700; color:#888; letter-spacing:1px;">ANCLAR CONTENIDO</label>
+                <div style="display:flex; gap:8px; flex-wrap:wrap; justify-content:center;">
+                    <button class="anchor-btn active" data-anchor="tl">↖ Arriba-izq</button>
+                    <button class="anchor-btn" data-anchor="tc">↑ Arriba-centro</button>
+                    <button class="anchor-btn" data-anchor="tr">↗ Arriba-der</button>
+                    <button class="anchor-btn" data-anchor="ml">← Medio-izq</button>
+                    <button class="anchor-btn" data-anchor="mc">⊕ Centro</button>
+                    <button class="anchor-btn" data-anchor="mr">→ Medio-der</button>
+                    <button class="anchor-btn" data-anchor="bl">↙ Abajo-izq</button>
+                    <button class="anchor-btn" data-anchor="bc">↓ Abajo-centro</button>
+                    <button class="anchor-btn" data-anchor="br">↘ Abajo-der</button>
+                </div>
+            </div>
+            <div class="setup-actions">
+                <button id="resize-apply-btn" class="primary-btn">Aplicar</button>
+                <div class="divider">o</div>
+                <button id="resize-cancel-btn" class="secondary-btn">Cancelar</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="app-container blur-content" id="main-app">
+        <aside class="sidebar">
+            <div class="sidebar-icons">
+                <button class="tool-btn" id="btn-config" title="Configuración (S)">
+                    <img src="simbolo engranaje.png" alt="Configuración">
+                </button>
+
+                <div class="opacity-settings">
+                    <div class="slider-container vertical tertiary">
+                        <img src="simbolo ojo abierto.png" class="mini-icon" id="eye-icon">
+                        <span id="opacity-value">100%</span>
+                        <input type="range" id="brush-opacity" min="1" max="100" value="100" orient="vertical">
+                    </div>
+                </div>
+                <div class="spacer"></div>
+                <div class="brush-settings">
+                    <div class="slider-container vertical">
+                        <img src="simbolo de tamaño.png" class="mini-icon">
+                        <span id="size-value">12</span>
+                        <input type="range" id="brush-size" min="1" max="100" value="12" orient="vertical">
+                    </div>
+                </div>
+
+                <div class="brush-settings hidden" id="blur-settings-container">
+                    <div class="slider-container vertical secondary">
+                        <div class="mini-icon" style="font-size:10px; font-weight:700; color:white;">BLUR</div>
+                        <span id="blur-value">0</span>
+                        <input type="range" id="brush-blur" min="0" max="100" value="0" orient="vertical">
+                    </div>
+                </div>
+
+
+                <button class="tool-btn active" id="btn-brush" title="Pincel">
+                    <img src="simbolo pincel.png" alt="Pincel">
+                </button>
+
+                <!-- Brush Type Menu (Floating) -->
+                <div id="brush-type-menu" class="floating-menu hidden">
+                    <div class="menu-header">
+                        <label>Atajo Pincel</label>
+                        <input type="text" id="brush-menu-shortcut" maxlength="1" placeholder="-">
+                    </div>
+                    <div class="menu-scroll-area">
+                        <ul id="brush-types-list"></ul>
+                    </div>
+                </div>
+
+                <button class="tool-btn" id="btn-colors" title="Colores">
+                    <img src="simbolo paleta de colores.png" alt="Colores">
+                </button>
+
+                <!-- Menú de Colores -->
+                <div id="colors-menu" class="floating-menu hidden">
+                    <div class="menu-header">
+                        <label>Atajo Colores</label>
+                        <input type="text" id="colors-menu-shortcut" maxlength="1" placeholder="-">
+                    </div>
+                    <div class="color-picker-section">
+                        <input type="color" id="main-color-picker" value="#000000">
+                        <button id="add-to-palette-btn">Añadir a paleta</button>
+                    </div>
+                    <div class="palette-container">
+                        <div id="palette-grid" class="palette-grid">
+                            <!-- Cells generated by JS -->
+                        </div>
+                    </div>
+                </div>
+                <button class="tool-btn" id="btn-filters" title="Filtros">
+                    <img src="simbolo FILTROS.png" alt="Filtros">
+                </button>
+
+                <!-- Menú de Filtros -->
+                <div id="filters-menu" class="floating-menu hidden">
+                    <div class="menu-header">
+                        <label>Filtros</label>
+                    </div>
+                    <div class="layers-global-actions">
+                        <button class="layer-action-btn filter-opt-btn" data-filter="blackwhite">Blanco y Negro (Lineart)</button>
+                        <button class="layer-action-btn filter-opt-btn" data-filter="levels">Curvas de Nivel</button>
+                        <button class="layer-action-btn filter-opt-btn" data-filter="hue">Cambiar Tono de Color</button>
+                        <button class="layer-action-btn filter-opt-btn" data-filter="edges">Encontrar Bordes (Lineart)</button>
+                        <button class="layer-action-btn filter-opt-btn" data-filter="invert">Invertir Colores</button>
+                    </div>
+                </div>
+                <button class="tool-btn" id="btn-multi" title="Multiherramienta">
+                    <img src="simbolo multiherramientas.png" alt="Multiherramienta">
+                </button>
+
+                <!-- Multi-Tool Menu (Floating) -->
+                <div id="multi-tool-menu" class="floating-menu hidden">
+                    <div class="menu-header">
+                        <label>Atajo principal</label>
+                        <input type="text" id="main-tool-shortcut" maxlength="1" placeholder="-">
+                    </div>
+                    <div class="menu-scroll-area">
+                        <ul id="tools-list">
+                            <!-- Tools will be generated here by JS -->
+                        </ul>
+                    </div>
+                </div>
+
+                <button class="tool-btn" id="btn-layers" title="Capas">
+                    <img src="simbolo capas.png" alt="Capas">
+                </button>
+
+                <!-- Menú de Capas -->
+                <div id="layers-menu" class="floating-menu hidden">
+                    <div class="menu-header">
+                        <label>Atajo Capas</label>
+                        <input type="text" id="layers-menu-shortcut" maxlength="1" placeholder="-">
+                    </div>
+                    <div class="layers-global-actions">
+                        <button class="layer-action-btn" id="new-layer-btn">Nueva capa</button>
+                        <button class="layer-action-btn" id="insert-layer-btn">Insertar capa desde lienzo</button>
+                        <button class="layer-action-btn" id="toggle-bg-btn">Fondo transparente ON</button>
+                    </div>
+                    <div class="menu-scroll-area">
+                        <ul id="layers-list">
+                            <!-- Ejemplo de capa visual -->
+                            <li class="layer-item">
+                                <div class="layer-main-info">
+                                    <div class="layer-thumbnail"></div>
+                                    <span class="layer-name">Capa 1</span>
+                                </div>
+                                <div class="layer-controls">
+                                    <input type="range" class="layer-opacity-slider" min="0" max="100" value="100">
+                                    <div class="layer-buttons">
+                                        <button class="mini-tool-btn" title="Visible"><img
+                                                src="simbolo ojo abierto.png"></button>
+                                        <button class="mini-tool-btn" title="Configurar"><img
+                                                src="simbolo engranaje.png"></button>
+                                        <button class="mini-tool-btn" title="Bloquear"><img
+                                                src="simbolo multiherramientas.png"></button>
+                                        <button class="mini-tool-btn delete" title="Borrar">×</button>
+                                    </div>
+                                </div>
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+                <div class="spacer"></div>
+                <button class="tool-btn" id="btn-main-actions" title="Acciones y Guardado">
+                    <img src="simbolo descargar.png" alt="Acciones">
+                </button>
+            </div>
+        </aside>
+
+        <!-- Main Actions Menu -->
+        <div id="main-actions-menu" class="floating-menu hidden" style="bottom: 80px; left: 85px;">
+            <div class="menu-header"><label>Acciones</label></div>
+            <div class="layers-global-actions">
+                <button id="action-download-png" class="layer-action-btn">Descargar como PNG</button>
+                <button id="action-copy-all" class="layer-action-btn">Copiar imagen al portapapeles</button>
+                <button id="action-show-save-slots" class="layer-action-btn">Guardar / Cargar Progreso</button>
+            </div>
+        </div>
+
+        <!-- Save Slots Submenu -->
+        <div id="save-slots-menu" class="floating-menu hidden" style="width: 320px; bottom: 80px; left: 320px;">
+            <div class="menu-header"><label>Ranuras de Guardado</label></div>
+            <div class="menu-scroll-area" style="max-height: 450px;">
+                <div id="slots-container" style="display: flex; flex-direction: column; gap: 15px; padding: 10px 0;">
+                    <!-- Generated by JS -->
+                </div>
+            </div>
+        </div>
+
+        <div id="config-menu" class="floating-menu hidden" style="bottom: 80px; left: 320px;">
+            <div class="menu-header">
+                <label>Preferencias</label>
+                <input type="text" id="config-shortcut" maxlength="1" value="S">
+            </div>
+            <div class="menu-scroll-area">
+                <div class="setup-group" style="flex-direction: column; gap: 12px; margin: 10px 0;">
+                    <div class="input-field"><label>MODO DE COPIADO</label><button id="toggle-copy-mode" class="layer-action-btn">POR CAPA</button></div>
+                    <div class="input-field"><label>PEGAR EN NUEVA CAPA</label><button id="toggle-paste-layer" class="layer-action-btn">ON</button></div>
+                    <div class="input-field" style="border-top:1px solid #eee; padding-top:12px; margin-top:4px;">
+                        <label>LIENZO</label>
+                        <button id="btn-resize-canvas" class="layer-action-btn">Cambiar tamaño</button>
+                    </div>
+                    <div class="input-field">
+                        <label>VISTA</label>
+                        <button id="btn-fullscreen" class="layer-action-btn">Pantalla completa</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <main class="canvas-area">
+            <div id="indicator-container">
+                <div id="active-tool-indicator">Pincel</div>
+                <button id="bucket-mode-btn" class="indicator-extra-btn hidden">MODO: CAPA</button>
+                <button id="reset-rotation-btn" class="hidden">Rotación original</button>
+            </div>
+            <canvas id="drawing-canvas"></canvas>
+        </main>
+    </div>
+
+    <!-- Filter Adjustment Panel (Floating) -->
+    <div id="filter-modal" class="floating-menu hidden" style="width: 320px; top: 100px; left: calc(100vw - 350px); bottom: auto; z-index: 3000; background: rgba(255,255,255,0.95); backdrop-filter: blur(5px);">
+        <div class="menu-header" style="cursor: move;" id="filter-header">
+            <label id="filter-title">Filtro</label>
+        </div>
+        <p id="filter-desc" style="font-size: 11px; color: #666; margin: 10px 0;">Ajusta los parámetros.</p>
+        
+        <div id="filter-controls-container" style="display: flex; flex-direction: column; gap: 15px; margin-bottom: 20px;">
+            <!-- Sliders with precision buttons will be injected here -->
+        </div>
+
+        <div class="setup-actions" style="gap: 10px;">
+            <button id="filter-apply-btn" class="primary-btn" style="padding: 10px;">Aplicar</button>
+            <button id="filter-cancel-btn" class="secondary-btn" style="padding: 10px;">Cancelar</button>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+
+</html>
