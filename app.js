@@ -100,6 +100,7 @@ let viewScale = 0.5; let viewPosX = 0; let viewPosY = 0; let viewRotation = 0;
 let isDrawing = false; let lastX = 0; let lastY = 0; let lastPressure = 0.5; let smoothedPressure = 0.5;
 let rotationPivot = null;
 let isSpacePressed = false;
+let isTemporaryPan = false;
 
 // Lasso/Bucket State
 let lassoPath = [];
@@ -174,6 +175,14 @@ let pushGridU = null;
 let pushGridV = null;
 let pushSnapshot = null;
 let pushBounds = null;
+let blurBuffer = null;
+let smudgeBuffer = null;
+let brushMaskCanvas = document.createElement('canvas');
+let brushMaskCtx = brushMaskCanvas.getContext('2d');
+let blurTempCanvas = document.createElement('canvas');
+let blurTempCtx = blurTempCanvas.getContext('2d');
+let bleedCanvas = document.createElement('canvas');
+let bleedCtx = bleedCanvas.getContext('2d');
 let currentTheme = 'dark';
 
 // ─────────────────────────────────────────────────────────────
@@ -374,6 +383,9 @@ const brushTypesData = [
     { id: 'rectangulo', name: 'Rectángulo', shortcut: 'g', isShape: true, shapeType: 'rect', useCompositing: true, useTexture: false, hardness: 1.0, size: 2, opacity: 1.00, blur: 0 },
     { id: 'circulo', name: 'Círculo / Elipse', shortcut: 'h', isShape: true, shapeType: 'ellipse', useCompositing: true, useTexture: false, hardness: 1.0, size: 2, opacity: 1.00, blur: 0 },
     { id: 'push-brush', name: 'Empujar', isPush: true, shortcut: 'v', size: 5, opacity: 0.5, blur: 0 },
+    { id: 'difuminar-agua', name: 'Difuminar (Agua)', shortcut: 'k', isBlur: true, useTexture: true, size: 5, opacity: 0.5, blur: 15 },
+    { id: 'difuminar-arrastre', name: 'Difuminar (Arrastre)', shortcut: 'l', isSmudge: true, useTexture: true, size: 5, opacity: 0.5, blur: 0 },
+    { id: 'difuminar-gauss', name: 'Difuminar (Gausiano)', shortcut: 'ñ', isGaussBlur: true, useTexture: true, size: 5, opacity: 0.5, blur: 20 },
 ];
 
 
@@ -2823,7 +2835,10 @@ function handlePointerDown(e) {
     }
 
     if (e.button === 1 || isSpacePressed) {
+        isTemporaryPan = true;
         currentTool = 'pan';
+    } else {
+        isTemporaryPan = false;
     }
 
     lastX = world.x; lastY = world.y;
@@ -2882,6 +2897,29 @@ function handlePointerDown(e) {
 
         pushGridU = new Float32Array(w * h);
         pushGridV = new Float32Array(w * h);
+    }
+    else if (currentBrush.isBlur) {
+        // Progressive blur doesn't need a pre-blurred buffer anymore
+        // We'll blur the actual content dynamically for better control
+        blurBuffer = null;
+    }
+    else if (currentBrush.isGaussBlur) {
+        // Static pre-blur for the Gaussian brush
+        blurBuffer = document.createElement('canvas');
+        blurBuffer.width = paperWidth;
+        blurBuffer.height = paperHeight;
+        const bctx = blurBuffer.getContext('2d');
+        // We use the "blur" setting of the brush for the Gaussian radius
+        bctx.filter = `blur(${currentBrush.blur}px)`;
+        bctx.drawImage(layers[selectedLayerIndex].canvas, 0, 0);
+    }
+    else if (currentBrush.isSmudge) {
+        const side = Math.ceil(baseBrushSize * 2.5);
+        smudgeBuffer = document.createElement('canvas');
+        smudgeBuffer.width = side; smudgeBuffer.height = side;
+        const sctx = smudgeBuffer.getContext('2d');
+        // Initial capture: ONLY what is inside the brush area
+        sctx.drawImage(layers[selectedLayerIndex].canvas, world.x - side / 2, world.y - side / 2, side, side, 0, 0, side, side);
     }
     else if (currentTool === 'lazo-sel' || currentTool === 'lazo-des') {
         lassoSelStartX = world.x; lassoSelStartY = world.y;
@@ -3158,7 +3196,7 @@ function handlePointerUp(e) {
     }
 
     isDrawing = false; lassoPath = [];
-    if (currentTool === 'pan') {
+    if (currentTool === 'pan' && isTemporaryPan) {
         if (activeFilterType) currentTool = 'none';
         else {
             const activeToolName = activeToolIndicator?.textContent || 'Pincel';
@@ -3167,6 +3205,7 @@ function handlePointerUp(e) {
             else currentTool = 'pincel';
         }
         showSelectionButtons(currentTool);
+        isTemporaryPan = false;
     }
     if (currentTool === 'rotate') selectTool('pincel', lastBrushTool);
 }
@@ -3186,7 +3225,149 @@ function executeLassoFill() {
 function drawPoint(x, y, pressure) {
     const size = baseBrushSize * (0.2 + pressure * 1.8); if (size <= 0) return;
     const l = layers[selectedLayerIndex];
-    if (currentBrush.useCompositing) { sctx.save(); if (currentBrush.isEraser) sctx.globalCompositeOperation = 'destination-out'; renderStamp(sctx, x, y, size, 1.0); sctx.restore(); }
+
+    if (currentBrush.isBlur) {
+        l.ctx.save();
+        if (l.alphaLocked) l.ctx.globalCompositeOperation = 'source-atop';
+
+        const side = Math.ceil(size * 2);
+        if (side < 1) { l.ctx.restore(); return; }
+
+        if (brushMaskCanvas.width < side || brushMaskCanvas.height < side) {
+            brushMaskCanvas.width = side + 20; brushMaskCanvas.height = side + 20;
+            blurTempCanvas.width = side + 20; blurTempCanvas.height = side + 20;
+            bleedCanvas.width = side + 20; bleedCanvas.height = side + 20;
+        }
+
+        // 1. Capture current area
+        blurTempCtx.clearRect(0, 0, side, side);
+        blurTempCtx.drawImage(l.canvas, x - side / 2, y - side / 2, side, side, 0, 0, side, side);
+
+        // 2. Color Bleeding Pass (The "Pro" fix for semi-transparency)
+        // We draw the snippet over itself with offsets to "expand" the colors into transparent areas
+        bleedCtx.clearRect(0, 0, side, side);
+        bleedCtx.drawImage(blurTempCanvas, 0, 0);
+        bleedCtx.globalCompositeOperation = 'destination-over';
+        for (let d = 1; d <= 3; d += 1) { // 3px bleed radius
+            bleedCtx.drawImage(blurTempCanvas, d, 0); bleedCtx.drawImage(blurTempCanvas, -d, 0);
+            bleedCtx.drawImage(blurTempCanvas, 0, d); bleedCtx.drawImage(blurTempCanvas, 0, -d);
+        }
+        bleedCtx.globalCompositeOperation = 'source-over';
+
+        // 3. Manual Multi-Sample Blur using the "Bled" canvas
+        brushMaskCtx.clearRect(0, 0, side, side);
+        const samples = 6;
+        const radius = Math.max(1, currentBrush.blur / 6);
+        brushMaskCtx.globalAlpha = 1 / samples;
+        for (let i = 0; i < samples; i++) {
+            const ang = (i / samples) * Math.PI * 2;
+            brushMaskCtx.drawImage(bleedCanvas, Math.cos(ang) * radius, Math.sin(ang) * radius);
+        }
+        brushMaskCtx.globalAlpha = 1.0;
+
+        // 3. Mask with texture
+        brushMaskCtx.globalCompositeOperation = 'destination-in';
+        if (currentBrush.useTexture && tintedAirbrushCanvas) {
+            brushMaskCtx.drawImage(tintedAirbrushCanvas, 0, 0, side, side);
+        } else {
+            const g = brushMaskCtx.createRadialGradient(side / 2, side / 2, (side / 2) * currentBrush.hardness, side / 2, side / 2, side / 2);
+            g.addColorStop(0, 'white'); g.addColorStop(1, 'rgba(255,255,255,0)');
+            brushMaskCtx.fillStyle = g; brushMaskCtx.fillRect(0, 0, side, side);
+        }
+        brushMaskCtx.globalCompositeOperation = 'source-over';
+
+        // 4. Draw back
+        l.ctx.globalAlpha = brushOpacity;
+        l.ctx.drawImage(brushMaskCanvas, 0, 0, side, side, x - side / 2, y - side / 2, side, side);
+        l.ctx.restore();
+    }
+    else if (currentBrush.isGaussBlur && blurBuffer) {
+        l.ctx.save();
+        if (l.alphaLocked) l.ctx.globalCompositeOperation = 'source-atop';
+
+        const side = Math.ceil(size * 2);
+        if (side < 1) { l.ctx.restore(); return; }
+
+        if (brushMaskCanvas.width < side || brushMaskCanvas.height < side) {
+            brushMaskCanvas.width = side + 20; brushMaskCanvas.height = side + 20;
+        }
+
+        // 1. Mask with texture
+        brushMaskCtx.clearRect(0, 0, side, side);
+        if (currentBrush.useTexture && tintedAirbrushCanvas) {
+            brushMaskCtx.drawImage(tintedAirbrushCanvas, 0, 0, side, side);
+        } else {
+            const g = brushMaskCtx.createRadialGradient(side / 2, side / 2, (side / 2) * currentBrush.hardness, side / 2, side / 2, side / 2);
+            g.addColorStop(0, 'white'); g.addColorStop(1, 'rgba(255,255,255,0)');
+            brushMaskCtx.fillStyle = g; brushMaskCtx.fillRect(0, 0, side, side);
+        }
+
+        // 2. Draw pre-blurred content through the mask
+        brushMaskCtx.globalCompositeOperation = 'source-in';
+        brushMaskCtx.drawImage(blurBuffer, x - side / 2, y - side / 2, side, side, 0, 0, side, side);
+        brushMaskCtx.globalCompositeOperation = 'source-over';
+
+        // 3. Draw back
+        l.ctx.globalAlpha = brushOpacity;
+        l.ctx.drawImage(brushMaskCanvas, 0, 0, side, side, x - side / 2, y - side / 2, side, side);
+        l.ctx.restore();
+    }
+    else if (currentBrush.isSmudge && smudgeBuffer) {
+        l.ctx.save();
+        if (l.alphaLocked) l.ctx.globalCompositeOperation = 'source-atop';
+
+        const side = Math.ceil(size * 2.5); // Slightly larger capture area for "wet" feel
+        if (side < 1) { l.ctx.restore(); return; }
+
+        if (brushMaskCanvas.width < side || brushMaskCanvas.height < side) {
+            brushMaskCanvas.width = side + 20; brushMaskCanvas.height = side + 20;
+        }
+
+        // 1. Prepare the smudge tip
+        brushMaskCtx.clearRect(0, 0, side, side);
+        brushMaskCtx.drawImage(smudgeBuffer, 0, 0, smudgeBuffer.width, smudgeBuffer.height, 0, 0, side, side);
+
+        // 2. Texture masking
+        brushMaskCtx.globalCompositeOperation = 'destination-in';
+        if (currentBrush.useTexture && tintedAirbrushCanvas) {
+            brushMaskCtx.drawImage(tintedAirbrushCanvas, 0, 0, side, side);
+        } else {
+            const g = brushMaskCtx.createRadialGradient(side / 2, side / 2, (side / 2) * currentBrush.hardness, side / 2, side / 2, side / 2);
+            g.addColorStop(0, 'white'); g.addColorStop(1, 'rgba(255,255,255,0)');
+            brushMaskCtx.fillStyle = g; brushMaskCtx.fillRect(0, 0, side, side);
+        }
+        brushMaskCtx.globalCompositeOperation = 'source-over';
+
+        // 3. Draw the smudge (with a slight shift to make it feel like "dragging")
+        l.ctx.globalAlpha = brushOpacity;
+        l.ctx.drawImage(brushMaskCanvas, 0, 0, side, side, x - side / 2, y - side / 2, side, side);
+
+        // 4. Update smudge buffer (intelligent pick up)
+        const sctx = smudgeBuffer.getContext('2d');
+        // Capture new pixels
+        blurTempCtx.clearRect(0, 0, side, side);
+        blurTempCtx.drawImage(l.canvas, x - side / 2, y - side / 2, side, side, 0, 0, side, side);
+
+        // Color Bleeding for Smudge (prevents dirty drags)
+        bleedCtx.clearRect(0, 0, side, side);
+        bleedCtx.drawImage(blurTempCanvas, 0, 0);
+        bleedCtx.globalCompositeOperation = 'destination-over';
+        bleedCtx.drawImage(blurTempCanvas, 1, 0); bleedCtx.drawImage(blurTempCanvas, -1, 0);
+        bleedCtx.drawImage(blurTempCanvas, 0, 1); bleedCtx.drawImage(blurTempCanvas, 0, -1);
+        bleedCtx.globalCompositeOperation = 'source-over';
+
+        // Blend bled colors into the buffer
+        sctx.globalAlpha = 0.12;
+        sctx.globalCompositeOperation = 'source-atop';
+        sctx.drawImage(bleedCanvas, 0, 0, side, side, 0, 0, smudgeBuffer.width, smudgeBuffer.height);
+        sctx.globalCompositeOperation = 'source-over';
+
+        sctx.globalAlpha = 0.02;
+        sctx.drawImage(bleedCanvas, 0, 0, side, side, 0, 0, smudgeBuffer.width, smudgeBuffer.height);
+
+        l.ctx.restore();
+    }
+    else if (currentBrush.useCompositing) { sctx.save(); if (currentBrush.isEraser) sctx.globalCompositeOperation = 'destination-out'; renderStamp(sctx, x, y, size, 1.0); sctx.restore(); }
     else { l.ctx.save(); if (currentBrush.isEraser) l.ctx.globalCompositeOperation = 'destination-out'; else if (l.alphaLocked) l.ctx.globalCompositeOperation = 'source-atop'; renderStamp(l.ctx, x, y, size, brushOpacity * 0.4); l.ctx.restore(); }
 }
 
@@ -3652,6 +3833,20 @@ function render() {
     }
     // ── Software Cursor (Drawn in screen space) ──
     if (cursorMode === 'always' || (cursorMode === 'auto' && !isDrawing)) {
+        const isBrush = (currentTool === 'pincel' || currentTool === 'push');
+        if (isBrush) {
+            const screenR = baseBrushSize * viewScale;
+            ctx.beginPath();
+            ctx.arc(screenCursorX, screenCursorY, screenR, 0, Math.PI * 2);
+            ctx.strokeStyle = 'rgba(255,255,255,0.6)';
+            ctx.lineWidth = 1.5;
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.arc(screenCursorX, screenCursorY, screenR, 0, Math.PI * 2);
+            ctx.strokeStyle = 'rgba(0,0,0,0.2)';
+            ctx.lineWidth = 0.5;
+            ctx.stroke();
+        }
         ctx.drawImage(customCursorImg, screenCursorX, screenCursorY);
     }
     requestAnimationFrame(render);
@@ -3735,8 +3930,17 @@ function selectTool(id, name) {
     syncBrushUI();
 
     // Show/Hide Blur slider
-    if (id === 'pincel' && (currentBrush.id === 'aero-duro' || currentBrush.id === 'aero-suave')) {
+    const isBlurTool = (currentBrush.id === 'aero-duro' || currentBrush.id === 'aero-suave' ||
+        currentBrush.isBlur || currentBrush.isGaussBlur);
+    if (id === 'pincel' && isBlurTool) {
         blurSettingsContainer.classList.remove('hidden');
+        if (currentBrush.isGaussBlur) {
+            blurSlider.min = 1; blurSlider.max = 40;
+            if (currentBrush.blur > 40) currentBrush.blur = 40;
+            if (currentBrush.blur < 1) currentBrush.blur = 1;
+        } else {
+            blurSlider.min = 0; blurSlider.max = 100;
+        }
     } else {
         blurSettingsContainer.classList.add('hidden');
     }
