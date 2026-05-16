@@ -408,9 +408,6 @@ function init() {
     setupMultiToolMenu();
     setupBrushMenu();
 
-    const removeBGBtn = document.getElementById('filter-remove-bg');
-    if (removeBGBtn) removeBGBtn.onclick = applyAIBGRemoval;
-
     requestAnimationFrame(render);
 
     createBtn.onclick = () => {
@@ -568,8 +565,32 @@ let curvePoints = [{ x: 0, y: 255 }, { x: 255, y: 0 }];
 let draggingCurvePoint = null;
 let edgesBgMode = 'transparent';
 let blackWhiteBgMode = 'transparent';
+let filterPrevTool = 'pincel';
+let chromaKeyColor = '#00ff00';
+let chromaThreshold = 30;
+let chromaFuzziness = 20;
+let chromaMaskCanvas = null;
+let chromaMaskCtx = null;
+let chromaDebugBG = null; // null, '#ff0000', '#00ff00', '#0000ff'
+let chromaLassoMode = 'none'; // 'none', 'add' (regenerador), 'sub' (eliminador), 'clear' (nulo), 'pick'
+
+function selectChromaLasso(mode) {
+    const lassoBtns = document.querySelectorAll('.chroma-lasso-btn');
+    if (chromaLassoMode === mode) {
+        chromaLassoMode = 'none';
+        lassoBtns.forEach(b => b.style.boxShadow = '');
+    } else {
+        chromaLassoMode = mode;
+        currentTool = 'none';
+        lassoBtns.forEach(b => {
+            b.style.boxShadow = b.dataset.mode === mode ? '0 0 0 3px rgba(0,0,0,0.4) inset' : '';
+        });
+    }
+}
 
 function openFilterModal(type) {
+    filterPrevTool = currentTool;
+    currentTool = 'none';
     activeFilterType = type;
     const l = layers[selectedLayerIndex];
     filterOriginalImgData = l.ctx.getImageData(0, 0, paperWidth, paperHeight);
@@ -606,6 +627,85 @@ function openFilterModal(type) {
     } else if (type === 'invert') {
         title.textContent = 'Invertir Colores';
         desc.textContent = 'Invierte todos los colores de la capa.';
+    } else if (type === 'chroma') {
+        title.textContent = 'Quitar Fondo (Chroma Key)';
+        desc.textContent = 'Selecciona un color para volverlo transparente. Usa los lazos para refinar.';
+        chromaDebugBG = '#0000ff';
+
+        // Debug BG Buttons
+        const debugWrap = document.createElement('div');
+        debugWrap.style.cssText = 'display:flex; gap:5px; margin-bottom:12px; justify-content:center;';
+        debugWrap.innerHTML = `
+            <button class="chroma-debug-btn" data-color="#ff0000" style="width:30px; height:20px; background:#ff0000; border:2px solid white; border-radius:4px; cursor:pointer;"></button>
+            <button class="chroma-debug-btn" data-color="#00ff00" style="width:30px; height:20px; background:#00ff00; border:2px solid white; border-radius:4px; cursor:pointer;"></button>
+            <button class="chroma-debug-btn" data-color="#0000ff" style="width:30px; height:20px; background:#0000ff; border:2px solid black; border-radius:4px; cursor:pointer;"></button>
+            <button class="chroma-debug-btn" data-color="none" style="width:30px; height:20px; background:white; border:2px solid #ccc; border-radius:4px; cursor:pointer; font-size:10px; font-weight:bold;">X</button>
+        `;
+        container.appendChild(debugWrap);
+        
+        debugWrap.querySelectorAll('.chroma-debug-btn').forEach(btn => {
+            btn.onclick = () => {
+                const color = btn.dataset.color;
+                chromaDebugBG = color === 'none' ? null : color;
+                debugWrap.querySelectorAll('.chroma-debug-btn').forEach(b => b.style.borderColor = 'white');
+                if (color !== 'none') btn.style.borderColor = 'black';
+            };
+        });
+
+        // Color Picker UI
+        const colorWrap = document.createElement('div');
+        colorWrap.style.cssText = 'display:flex; flex-direction:column; gap:8px; margin-bottom:10px;';
+        colorWrap.innerHTML = `
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+                <label style="font-size:11px; font-weight:700; color:#444;">Color a eliminar</label>
+                <div id="chroma-color-preview" style="width:24px; height:24px; border-radius:4px; border:2px solid white; box-shadow:0 0 5px rgba(0,0,0,0.2); background:${chromaKeyColor};"></div>
+            </div>
+            <button id="chroma-pick-btn" class="layer-action-btn" style="width:100%; font-size:10px;">SELECCIONAR COLOR DEL LIENZO</button>
+        `;
+        container.appendChild(colorWrap);
+        
+        colorWrap.querySelector('#chroma-pick-btn').onclick = () => {
+            chromaLassoMode = 'pick';
+            colorWrap.querySelector('#chroma-pick-btn').textContent = 'HAZ CLICK EN EL COLOR...';
+        };
+
+        addFilterSlider('Tolerancia', 0, 255, chromaThreshold, (v) => { chromaThreshold = v; applyFilters(); });
+        addFilterSlider('Suavizado (Fuzziness)', 0, 255, chromaFuzziness, (v) => { chromaFuzziness = v; applyFilters(); });
+
+        // Lasso Actions
+        const qKey = brushTypesData.find(b => b.id === 'lazo-relleno')?.shortcut.toUpperCase() || 'Q';
+        const sKey = brushTypesData.find(b => b.id === 'borrador')?.shortcut.toUpperCase() || 'S';
+        const wKey = brushTypesData.find(b => b.id === 'lazo-borrador')?.shortcut.toUpperCase() || 'W';
+
+        const lassoWrap = document.createElement('div');
+        lassoWrap.style.cssText = 'display:flex; flex-direction:column; gap:6px; margin-top:10px;';
+        lassoWrap.innerHTML = `
+            <button class="layer-action-btn chroma-lasso-btn" data-mode="add" style="font-size:10px; background:#4caf50; color:white; border:none; height:32px; display:flex; justify-content:space-between; align-items:center; padding:0 10px;">
+                <span>LAZO REGENERADOR</span> <span style="opacity:0.7; font-weight:bold;">[${qKey}]</span>
+            </button>
+            <button class="layer-action-btn chroma-lasso-btn" data-mode="clear" style="font-size:10px; background:#607d8b; color:white; border:none; height:32px; display:flex; justify-content:space-between; align-items:center; padding:0 10px;">
+                <span>LAZO NULO</span> <span style="opacity:0.7; font-weight:bold;">[${sKey}]</span>
+            </button>
+            <button class="layer-action-btn chroma-lasso-btn" data-mode="sub" style="font-size:10px; background:#f44336; color:white; border:none; height:32px; display:flex; justify-content:space-between; align-items:center; padding:0 10px;">
+                <span>LAZO ELIMINADOR</span> <span style="opacity:0.7; font-weight:bold;">[${wKey}]</span>
+            </button>
+        `;
+        container.appendChild(lassoWrap);
+        
+        const lassoBtns = lassoWrap.querySelectorAll('.chroma-lasso-btn');
+        lassoBtns.forEach(btn => {
+            btn.onclick = () => selectChromaLasso(btn.dataset.mode);
+        });
+
+        // Setup manual mask canvas
+        if (!chromaMaskCanvas) {
+            chromaMaskCanvas = document.createElement('canvas');
+            chromaMaskCanvas.width = paperWidth;
+            chromaMaskCanvas.height = paperHeight;
+            chromaMaskCtx = chromaMaskCanvas.getContext('2d');
+        }
+        chromaMaskCtx.clearRect(0, 0, paperWidth, paperHeight);
+        chromaLassoMode = 'pick';
     }
 
     filterModal.classList.remove('hidden');
@@ -916,6 +1016,38 @@ function applyFilters() {
             data[i + 1] = 255 - data[i + 1];
             data[i + 2] = 255 - data[i + 2];
         }
+    } else if (activeFilterType === 'chroma') {
+        const keyRGB = hexToRgbArray(chromaKeyColor, 255);
+        const threshSq = chromaThreshold * chromaThreshold;
+        const fuzzyRange = chromaFuzziness;
+        
+        // Manual mask data for fast access
+        const mData = chromaMaskCtx.getImageData(0, 0, paperWidth, paperHeight).data;
+
+        for (let i = 0; i < data.length; i += 4) {
+            // Check manual mask first: R=255 means add, G=255 means sub
+            if (mData[i] > 200) {
+                // Regenerate: keep original alpha
+                continue; 
+            } else if (mData[i + 1] > 200) {
+                // Remove: force alpha to 0
+                data[i + 3] = 0;
+                continue;
+            }
+
+            const r = data[i], g = data[i + 1], b = data[i + 2];
+            const dr = r - keyRGB[0], dg = g - keyRGB[1], db = b - keyRGB[2];
+            const dist = Math.sqrt(dr * dr + dg * dg + db * db);
+
+            let alpha = 255;
+            if (dist < chromaThreshold) {
+                alpha = 0;
+            } else if (dist < chromaThreshold + fuzzyRange) {
+                alpha = 255 * ((dist - chromaThreshold) / (fuzzyRange || 1));
+            }
+            
+            data[i + 3] = Math.min(data[i + 3], alpha);
+        }
     }
 
     l.ctx.putImageData(workingData, 0, 0);
@@ -925,6 +1057,10 @@ function commitFilter() {
     pushHistory(); // Capture the new state
     filterModal.classList.add('hidden');
     filterOriginalImgData = null;
+    activeFilterType = null;
+    chromaDebugBG = null;
+    currentTool = filterPrevTool;
+    chromaLassoMode = 'none';
     updateThumbnails(); updateLayersUI();
 }
 
@@ -934,6 +1070,10 @@ function cancelFilter() {
     }
     filterModal.classList.add('hidden');
     filterOriginalImgData = null;
+    activeFilterType = null;
+    chromaDebugBG = null;
+    currentTool = filterPrevTool;
+    chromaLassoMode = 'none';
 }
 
 // Helper: RGB to HSL
@@ -1660,67 +1800,6 @@ function compositeLayers(destCtx) {
             destCtx.restore();
             i++;
         }
-    }
-}
-
-// ─────────────────────────────────────────────────────────────
-//  AI BACKGROUND REMOVAL
-// ─────────────────────────────────────────────────────────────
-async function applyAIBGRemoval() {
-    const layer = layers[selectedLayerIndex];
-    if (!layer) return;
-
-    // UI Feedback
-    const btn = document.getElementById('filter-remove-bg');
-    const originalText = btn.textContent;
-    btn.textContent = "🔮 PROCESANDO...";
-    btn.disabled = true;
-
-    try {
-        // Convert canvas to base64 (stripping the prefix)
-        const base64WithPrefix = layer.canvas.toDataURL('image/png');
-        const base64 = base64WithPrefix.split(',')[1];
-
-        const apiKey = "sk-39d1699b6472ef8d2520b58fc2f1a8bb3b5eb226fbbd886e60a5bb45b5b77e39";
-
-        const res = await fetch("https://api.withoutbg.com/v1.0/image-without-background-base64", {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json",
-                "X-API-Key": apiKey
-            },
-            body: JSON.stringify({ image_base64: base64 })
-        });
-
-        if (!res.ok) {
-            const errorText = await res.text();
-            throw new Error(`HTTP ${res.status}: ${errorText}`);
-        }
-
-        const data = await res.json();
-        if (!data.img_without_background_base64) throw new Error("La IA no devolvió ninguna imagen.");
-
-        const resultBase64 = "data:image/png;base64," + data.img_without_background_base64;
-
-        const img = new Image();
-        img.onload = () => {
-            // Apply the result to the layer
-            layer.ctx.clearRect(0, 0, paperWidth, paperHeight);
-            layer.ctx.drawImage(img, 0, 0);
-            updateThumbnails();
-            updateLayersUI();
-            pushHistory();
-            btn.textContent = originalText;
-            btn.disabled = false;
-        };
-        img.onerror = () => { throw new Error("Error al cargar la imagen procesada."); };
-        img.src = resultBase64;
-
-    } catch (e) {
-        console.error("Error en RemoveBG:", e);
-        alert("Hubo un problema con la IA: " + e.message);
-        btn.textContent = originalText;
-        btn.disabled = false;
     }
 }
 
@@ -2473,6 +2552,36 @@ function handlePointerDown(e) {
     sctx.clearRect(0, 0, strokeCanvas.width, strokeCanvas.height);
     lassoPath = []; lassoSelPath = [];
     const world = screenToWorld(e.offsetX, e.offsetY);
+
+    // Filter Priority
+    if (activeFilterType === 'chroma') {
+        if (chromaLassoMode === 'pick') {
+            const color = pickColorAt(world.x, world.y);
+            if (color) {
+                chromaKeyColor = color;
+                const prev = document.getElementById('chroma-color-preview');
+                if (prev) prev.style.background = color;
+                const btn = document.getElementById('chroma-pick-btn');
+                if (btn) btn.textContent = 'SELECCIONAR COLOR DEL LIENZO';
+                chromaLassoMode = 'add';
+                const addBtn = document.querySelector('.chroma-lasso-btn[data-mode="add"]');
+                if (addBtn) {
+                    document.querySelectorAll('.chroma-lasso-btn').forEach(b => b.style.boxShadow = '');
+                    addBtn.style.boxShadow = '0 0 0 3px rgba(0,0,0,0.3) inset';
+                }
+                applyFilters();
+            }
+            return;
+        } else if (chromaLassoMode === 'add' || chromaLassoMode === 'sub' || chromaLassoMode === 'clear') {
+            isDrawing = true;
+            lassoPath = [{ x: world.x, y: world.y }];
+            return;
+        }
+        // Allow zoom/pan tools to continue to their logic below
+        if (currentTool === 'zoom' || currentTool === 'pan' || e.button === 1) { /* ok */ }
+        else return; // Block everything else
+    }
+
     lastX = world.x; lastY = world.y;
     const rawP = (e.pressure === 0.5 && e.pointerType !== 'mouse') ? 0.1 : e.pressure || 0.1;
     lastPressure = rawP; smoothedPressure = rawP;
@@ -2550,6 +2659,23 @@ function handlePointerDown(e) {
         } else {
             drawPoint(lastX, lastY, smoothedPressure);
         }
+    }
+    
+    // Handle Chroma Filter picking
+    if (activeFilterType === 'chroma' && chromaLassoMode === 'pick') {
+        const color = pickColorAt(world.x, world.y);
+        if (color) {
+            chromaKeyColor = color;
+            const prev = document.getElementById('chroma-color-preview');
+            if (prev) prev.style.background = color;
+            const btn = document.getElementById('chroma-pick-btn');
+            if (btn) btn.textContent = 'SELECCIONAR COLOR DEL LIENZO';
+            chromaLassoMode = 'none';
+            applyFilters();
+        }
+    } else if (activeFilterType === 'chroma' && (chromaLassoMode === 'add' || chromaLassoMode === 'sub')) {
+        lassoPath = [{ x: world.x, y: world.y }];
+        isDrawing = true; // Force drawing mode for the filter lasso
     }
     e.preventDefault();
 }
@@ -2635,6 +2761,10 @@ function handlePointerMove(e) {
             for (let i = 0; i <= steps; i++) { const t = steps === 0 ? 1 : i / steps; drawPoint(lastX + (cX - lastX) * t, lastY + (cY - lastY) * t, lastPressure + (smoothedPressure - lastPressure) * t); }
             [lastX, lastY, lastPressure] = [cX, cY, smoothedPressure];
         }
+    }
+
+    if (activeFilterType === 'chroma' && (chromaLassoMode === 'add' || chromaLassoMode === 'sub' || chromaLassoMode === 'clear')) {
+        lassoPath.push({ x: world.x, y: world.y });
     }
 }
 
@@ -2742,6 +2872,26 @@ function handlePointerUp(e) {
         pushGridU = null; pushGridV = null; pushSnapshot = null; pushBounds = null;
         updateThumbnails(); updateLayersUI();
         pushHistory();
+    }
+
+    if (activeFilterType === 'chroma' && (chromaLassoMode === 'add' || chromaLassoMode === 'sub' || chromaLassoMode === 'clear')) {
+        if (lassoPath.length >= 3) {
+            chromaMaskCtx.save();
+            if (chromaLassoMode === 'clear') {
+                chromaMaskCtx.globalCompositeOperation = 'destination-out';
+                chromaMaskCtx.fillStyle = 'black';
+            } else {
+                chromaMaskCtx.globalCompositeOperation = 'source-over';
+                chromaMaskCtx.fillStyle = chromaLassoMode === 'add' ? '#FF0000' : '#00FF00'; 
+            }
+            chromaMaskCtx.beginPath();
+            chromaMaskCtx.moveTo(lassoPath[0].x, lassoPath[0].y);
+            lassoPath.forEach(p => chromaMaskCtx.lineTo(p.x, p.y));
+            chromaMaskCtx.closePath();
+            chromaMaskCtx.fill();
+            chromaMaskCtx.restore();
+            applyFilters();
+        }
     }
 
     isDrawing = false; lassoPath = [];
@@ -2887,7 +3037,12 @@ function render() {
 
     // Paper bg
     ctx.save(); ctx.shadowColor = 'rgba(0,0,0,0.5)'; ctx.shadowBlur = 40; ctx.shadowOffsetX = 10; ctx.shadowOffsetY = 20;
-    ctx.fillStyle = transparentBG ? checkerPattern : '#ffffff'; ctx.fillRect(0, 0, paperWidth, paperHeight); ctx.restore();
+    if (activeFilterType === 'chroma' && chromaDebugBG) {
+        ctx.fillStyle = chromaDebugBG;
+    } else {
+        ctx.fillStyle = transparentBG ? checkerPattern : '#ffffff';
+    }
+    ctx.fillRect(0, 0, paperWidth, paperHeight); ctx.restore();
 
     // Layers
     let i = 0;
@@ -2945,7 +3100,7 @@ function render() {
 
             // Live stroke preview inside a clipping group
             const actInGrp = group.findIndex(layer => layer === layers[selectedLayerIndex]);
-            if (actInGrp !== -1 && isDrawing && currentBrush.useCompositing && !currentBrush.isLasso) {
+            if (actInGrp !== -1 && isDrawing && currentBrush.useCompositing && !currentBrush.isLasso && !activeFilterType) {
                 mctx.clearRect(0, 0, paperWidth, paperHeight);
                 mctx.globalCompositeOperation = 'source-over';
                 mctx.save();
@@ -2982,7 +3137,7 @@ function render() {
                 ctx.globalCompositeOperation = l.blendMode;
                 ctx.drawImage(l.canvas, 0, 0);
 
-                if (i === selectedLayerIndex && isDrawing && currentBrush.useCompositing && !currentBrush.isLasso) {
+                if (i === selectedLayerIndex && isDrawing && currentBrush.useCompositing && !currentBrush.isLasso && !activeFilterType) {
                     mctx.clearRect(0, 0, paperWidth, paperHeight);
                     mctx.globalCompositeOperation = 'source-over';
                     mctx.save();
@@ -3191,6 +3346,23 @@ function render() {
         ctx.restore();
     }
 
+    // ── Draw filter lasso preview ──
+    if (activeFilterType === 'chroma' && isDrawing && (chromaLassoMode === 'add' || chromaLassoMode === 'sub' || chromaLassoMode === 'clear') && lassoPath.length > 1) {
+        ctx.save();
+        ctx.globalAlpha = 0.5;
+        if (chromaLassoMode === 'clear') {
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.4)';
+            ctx.strokeStyle = '#607d8b';
+        } else {
+            ctx.fillStyle = chromaLassoMode === 'add' ? 'rgba(76, 175, 80, 0.4)' : 'rgba(244, 67, 54, 0.4)';
+            ctx.strokeStyle = chromaLassoMode === 'add' ? '#4caf50' : '#f44336';
+        }
+        ctx.beginPath(); ctx.moveTo(lassoPath[0].x, lassoPath[0].y); lassoPath.forEach(p => ctx.lineTo(p.x, p.y)); ctx.closePath(); ctx.fill();
+        ctx.lineWidth = 2 / viewScale; ctx.setLineDash([5 / viewScale, 5 / viewScale]);
+        ctx.beginPath(); ctx.moveTo(lassoPath[0].x, lassoPath[0].y); lassoPath.forEach(p => ctx.lineTo(p.x, p.y)); ctx.closePath(); ctx.stroke();
+        ctx.restore();
+    }
+
     ctx.restore();
 
     // Rotation pivot dot
@@ -3241,6 +3413,12 @@ function syncBrushUI() {
 }
 
 function selectTool(id, name) {
+    if (activeFilterType) {
+        if (id !== 'zoom' && id !== 'pan') return; // Only allow zoom/pan
+        chromaLassoMode = 'none'; // Disable lasso when navigating
+        // Remove highlighting from chroma lasso buttons
+        document.querySelectorAll('.chroma-lasso-btn').forEach(b => b.style.boxShadow = '');
+    }
     if (currentTool === 'modify-sel' && id !== 'modify-sel' && modSelInitialized) commitModifySelection();
 
     if (isResizingCanvas) {
@@ -3296,6 +3474,13 @@ function rgbToHex(r, g, b) {
     return "#" + ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1).toUpperCase();
 }
 
+function hexToRgbArray(hex) {
+    const r = parseInt(hex.slice(1, 3), 16);
+    const g = parseInt(hex.slice(3, 5), 16);
+    const b = parseInt(hex.slice(5, 7), 16);
+    return [r, g, b];
+}
+
 function pickColorAt(worldX, worldY) {
     const startX = Math.floor(worldX); const startY = Math.floor(worldY);
     if (startX < 0 || startX >= paperWidth || startY < 0 || startY >= paperHeight) return null;
@@ -3335,6 +3520,19 @@ function updateEyedropperPreview(screenX, screenY, worldX, worldY) {
 function handleGlobalShortcuts(e) {
     if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return;
     const key = e.key.toLowerCase();
+    
+    // Allow Zoom and Pan shortcuts during filters
+    if (activeFilterType) {
+        const qS = brushTypesData.find(b => b.id === 'lazo-relleno')?.shortcut || 'q';
+        const sS = brushTypesData.find(b => b.id === 'borrador')?.shortcut || 's';
+        const wS = brushTypesData.find(b => b.id === 'lazo-borrador')?.shortcut || 'w';
+
+        if (key === qS) { selectChromaLasso('add'); return; }
+        if (key === sS) { selectChromaLasso('clear'); return; }
+        if (key === wS) { selectChromaLasso('sub'); return; }
+        if (key !== 'z' && key !== 'x') return;
+    }
+    
     const ms = (mainShortcutInput?.value || '').toLowerCase();
     const bs = (brushShortcutInput?.value || '').toLowerCase();
     const ls = (layersShortcutInput?.value || '').toLowerCase();
