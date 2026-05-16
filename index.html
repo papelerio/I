@@ -61,6 +61,11 @@
                 <label
                     style="font-size:10px; font-weight:700; color:#888; text-align:center; display:block; margin-bottom:8px;">ANCLAR
                     CONTENIDO</label>
+                <div class="input-field" style="margin-bottom: 12px;">
+                    <label style="font-size: 11px;">MODO LIBRE</label>
+                    <button id="toggle-resize-libre" class="layer-action-btn"
+                        style="padding: 4px 8px; font-size: 11px;">ON</button>
+                </div>
                 <div class="anchor-grid">
                     <button class="anchor-dot" data-anchor="tl" title="Arriba Izquierda"></button>
                     <button class="anchor-dot" data-anchor="tc" title="Arriba Centro"></button>
@@ -165,7 +170,8 @@
                         <button class="layer-action-btn filter-opt-btn" data-filter="edges">Encontrar Bordes
                             (Lineart)</button>
                         <button class="layer-action-btn filter-opt-btn" data-filter="invert">Invertir Colores</button>
-                        <button class="layer-action-btn filter-opt-btn" data-filter="chroma">Quitar Fondo (Chroma Key)</button>
+                        <button class="layer-action-btn filter-opt-btn" data-filter="chroma">Quitar Fondo (Chroma
+                            Key)</button>
                     </div>
                 </div>
                 <button class="tool-btn" id="btn-multi" title="Multiherramienta">
@@ -197,6 +203,7 @@
                     </div>
                     <div class="layers-global-actions">
                         <button class="layer-action-btn" id="new-layer-btn">Nueva capa</button>
+                        <button class="layer-action-btn" id="import-layer-btn">Importar imagen</button>
                         <button class="layer-action-btn" id="insert-layer-btn">Insertar capa desde lienzo</button>
                         <button class="layer-action-btn" id="toggle-bg-btn">Fondo transparente ON</button>
                     </div>

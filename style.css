@@ -1353,11 +1353,13 @@ body:not(.theme-classic) .tool-btn img {
     display: flex;
     gap: 12px;
     z-index: 4000;
-    pointer-events: none; /* Let clicks pass through to the canvas */
+    pointer-events: none;
+    /* Let clicks pass through to the canvas */
 }
 
 .floating-flip-btn {
-    pointer-events: auto; /* Re-enable clicks for the buttons only */
+    pointer-events: auto;
+    /* Re-enable clicks for the buttons only */
     width: 36px;
     height: 36px;
     background: white;
@@ -1367,7 +1369,7 @@ body:not(.theme-classic) .tool-btn img {
     display: flex;
     align-items: center;
     justify-content: center;
-    box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
     transition: transform 0.2s, background 0.2s;
 }
 

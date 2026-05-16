@@ -99,6 +99,7 @@ const tintedAirbrushCanvas = document.createElement('canvas'); const tactx = tin
 let viewScale = 0.5; let viewPosX = 0; let viewPosY = 0; let viewRotation = 0;
 let isDrawing = false; let lastX = 0; let lastY = 0; let lastPressure = 0.5; let smoothedPressure = 0.5;
 let rotationPivot = null;
+let isSpacePressed = false;
 
 // Lasso/Bucket State
 let lassoPath = [];
@@ -145,6 +146,13 @@ let modSelDragStart = null;  // { wx, wy } world coords at drag start
 let modSelActive = false;    // true while a transform is in progress
 let modSelInitialized = false; // true once pixels captured
 let modSelLayersData = [];   // Array of { layer, canvas } for multi-layer transform
+let modSelRotation = 0;
+let modSelFlipX = 1;
+let modSelFlipY = 1;
+let isImportingNewImage = false; // flag for ghost import
+let flipControls = null;
+let flipHBtn = null;
+let flipVBtn = null;
 
 // Canvas Resize State
 let isResizingCanvas = false;
@@ -153,6 +161,11 @@ let resizePreviewH = 0;
 let resizeActiveHandle = null; // 'tl','tc','tr','ml','mr','bl','bc','br'
 let resizeStartMouse = null;
 let resizeStartDim = null;
+let resizeLibre = true;
+let resizeOffsetX = 0;
+let resizeOffsetY = 0;
+let resizeStartOffsetX = 0;
+let resizeStartOffsetY = 0;
 let fitScreenBtn = null;
 let eyedropperFadeTimeout = null;
 let zoomPivotWorld = null;
@@ -212,7 +225,10 @@ function captureHistoryState() {
             ? modSelCtx.getImageData(0, 0, modSelCanvas.width, modSelCanvas.height)
             : null,
         modSelMode: modifySelMode,
-        modSelLayersIndices: modSelInitialized ? modSelLayersData.map(item => layers.indexOf(item.layer)) : []
+        modSelLayersIndices: modSelInitialized ? modSelLayersData.map(item => layers.indexOf(item.layer)) : [],
+        modSelRotation: modSelRotation,
+        modSelFlipX: modSelFlipX,
+        modSelFlipY: modSelFlipY
     };
 }
 
@@ -296,9 +312,13 @@ function restoreHistoryState(snapshot) {
                 }
                 return null;
             }).filter(Boolean);
+            modSelRotation = snapshot.modSelRotation || 0;
+            modSelFlipX = snapshot.modSelFlipX !== undefined ? snapshot.modSelFlipX : 1;
+            modSelFlipY = snapshot.modSelFlipY !== undefined ? snapshot.modSelFlipY : 1;
         } else {
             modSelInitialized = false; modSelCanvas = null; modSelBounds = null; modSelOrigBounds = null;
             modSelLayersData = [];
+            modSelRotation = 0; modSelFlipX = 1; modSelFlipY = 1;
         }
 
         // Restore tool selection ONLY for Modify Selection when active
@@ -376,7 +396,7 @@ updateTintedTexture();
 
 function resetImportButton() {
     startupImportState = 0;
-    const importBtn = document.getElementById('import-btn');    
+    const importBtn = document.getElementById('import-btn');
     if (importBtn) {
         importBtn.classList.remove('waiting-paste');
         importBtn.textContent = 'Importar imagen';
@@ -396,6 +416,31 @@ function init() {
     canvas.addEventListener('pointermove', handlePointerMove);
     canvas.addEventListener('pointerup', handlePointerUp);
     canvas.addEventListener('pointercancel', handlePointerUp);
+
+    // Fast Zoom with Mouse Wheel (Centered at cursor)
+    canvas.addEventListener('wheel', (e) => {
+        e.preventDefault();
+        const delta = -e.deltaY;
+        const factor = Math.pow(1.1, delta / 100);
+
+        const rect = canvas.getBoundingClientRect();
+        const mouseX = e.clientX - rect.left;
+        const mouseY = e.clientY - rect.top;
+
+        // World coordinates before zoom
+        const worldBefore = screenToWorld(mouseX, mouseY);
+
+        // Update scale
+        viewScale *= factor;
+        viewScale = Math.max(0.01, Math.min(viewScale, 50));
+
+        // World coordinates after zoom
+        const worldAfter = screenToWorld(mouseX, mouseY);
+
+        // Adjust view position to keep mouse over the same world point
+        viewPosX += (worldAfter.x - worldBefore.x);
+        viewPosY += (worldAfter.y - worldBefore.y);
+    }, { passive: false });
 
     flipControls = document.getElementById('flip-controls');
     flipHBtn = document.getElementById('flip-h-btn');
@@ -425,33 +470,52 @@ function init() {
         }
     };
 
-    // Listener for Paste during Startup
+    // Drag & Drop
+    window.addEventListener('dragover', (e) => e.preventDefault());
+    window.addEventListener('drop', (e) => {
+        e.preventDefault();
+        const files = e.dataTransfer.files;
+        if (files && files.length > 0) {
+            handleIncomingFile(files[0]);
+        }
+    });
+
+    // Listener for Paste
     window.addEventListener('paste', (e) => {
-        if (startupImportState === 1) {
-            const items = (e.clipboardData || e.originalEvent.clipboardData).items;
-            for (let i = 0; i < items.length; i++) {
-                if (items[i].type.indexOf("image") !== -1) {
-                    const blob = items[i].getAsFile();
-                    const img = new Image();
-                    img.src = URL.createObjectURL(blob);
-                    img.onload = () => {
-                        startApp(img.width, img.height, img);
-                        resetImportButton();
-                    };
+        // 1. Try to get images from items (standard for images copied from web/apps)
+        const items = (e.clipboardData || e.originalEvent.clipboardData).items;
+        let found = false;
+        for (let i = 0; i < items.length; i++) {
+            if (items[i].type.indexOf("image") !== -1) {
+                const file = items[i].getAsFile();
+                if (file) {
+                    handleIncomingFile(file);
+                    found = true;
                     break;
+                }
+            }
+        }
+
+        // 2. If not found, try to get files (standard for files copied from desktop/explorer)
+        if (!found) {
+            const files = (e.clipboardData || e.originalEvent.clipboardData).files;
+            if (files && files.length > 0) {
+                for (let i = 0; i < files.length; i++) {
+                    if (files[i].type.indexOf("image") !== -1) {
+                        handleIncomingFile(files[i]);
+                        break;
+                    }
                 }
             }
         }
     });
 
     fileInput.onchange = (e) => {
-        const file = e.target.files[0]; if (!file) return;
-        const reader = new FileReader(); reader.onload = (ev) => {
-            const img = new Image(); img.onload = () => {
-                startApp(img.width, img.height, img);
-                resetImportButton();
-            }; img.src = ev.target.result;
-        }; reader.readAsDataURL(file);
+        const file = e.target.files[0];
+        if (file) {
+            handleIncomingFile(file);
+            e.target.value = ''; // Clear value so same file can be imported again
+        }
     };
 
     sizeSlider.oninput = (e) => { baseBrushSize = e.target.value | 0; sizeValue.textContent = baseBrushSize; currentBrush.size = baseBrushSize; };
@@ -465,9 +529,32 @@ function init() {
 
 
     resetRotationBtn.onclick = resetRotation;
-    document.addEventListener('keydown', handleGlobalShortcuts);
+    function handleKeyDown(e) {
+        if (e.code === 'Space' && e.target.tagName !== 'INPUT' && e.target.tagName !== 'SELECT') {
+            isSpacePressed = true;
+            if (currentTool !== 'pan') {
+                canvas.style.cursor = 'grab';
+            }
+        }
+        handleGlobalShortcuts(e);
+    }
+
+    function handleKeyUp(e) {
+        if (e.code === 'Space') {
+            isSpacePressed = false;
+            canvas.style.cursor = '';
+        }
+    }
+
+    document.addEventListener('keydown', handleKeyDown);
+    document.addEventListener('keyup', handleKeyUp);
+
 
     document.getElementById('new-layer-btn').onclick = () => addLayer("Nueva Capa");
+    document.getElementById('import-layer-btn').onclick = () => {
+        toggleMenu(null); // Close menu
+        fileInput.click();
+    };
     document.getElementById('insert-layer-btn').onclick = () => addLayer("Capa desde lienzo", true);
     document.getElementById('toggle-bg-btn').onclick = toggleBackground;
 
@@ -527,6 +614,25 @@ function init() {
 
     // Resize Canvas
     document.getElementById('btn-resize-canvas').onclick = () => { openResizeModal(); toggleMenu(null); };
+    document.getElementById('toggle-resize-libre').onclick = (e) => {
+        resizeLibre = !resizeLibre;
+        e.target.textContent = resizeLibre ? 'ON' : 'OFF';
+        e.target.style.background = resizeLibre ? '#0066ff' : '';
+        e.target.style.color = resizeLibre ? 'white' : '';
+        if (!resizeLibre) {
+            // Recalculate offsets from anchor when turning off Libre mode
+            const dw = resizePreviewW - paperWidth;
+            const dh = resizePreviewH - paperHeight;
+            const col = resizeAnchor[1];
+            const row = resizeAnchor[0];
+            if (col === 'l') resizeOffsetX = 0;
+            else if (col === 'c') resizeOffsetX = Math.round(dw / 2);
+            else if (col === 'r') resizeOffsetX = dw;
+            if (row === 't') resizeOffsetY = 0;
+            else if (row === 'm') resizeOffsetY = Math.round(dh / 2);
+            else if (row === 'b') resizeOffsetY = dh;
+        }
+    };
 
     // Fullscreen
     const fsBtn = document.getElementById('btn-fullscreen');
@@ -642,7 +748,7 @@ function openFilterModal(type) {
             <button class="chroma-debug-btn" data-color="none" style="width:30px; height:20px; background:white; border:2px solid #ccc; border-radius:4px; cursor:pointer; font-size:10px; font-weight:bold;">X</button>
         `;
         container.appendChild(debugWrap);
-        
+
         debugWrap.querySelectorAll('.chroma-debug-btn').forEach(btn => {
             btn.onclick = () => {
                 const color = btn.dataset.color;
@@ -663,7 +769,7 @@ function openFilterModal(type) {
             <button id="chroma-pick-btn" class="layer-action-btn" style="width:100%; font-size:10px;">SELECCIONAR COLOR DEL LIENZO</button>
         `;
         container.appendChild(colorWrap);
-        
+
         colorWrap.querySelector('#chroma-pick-btn').onclick = () => {
             chromaLassoMode = 'pick';
             colorWrap.querySelector('#chroma-pick-btn').textContent = 'HAZ CLICK EN EL COLOR...';
@@ -691,7 +797,7 @@ function openFilterModal(type) {
             </button>
         `;
         container.appendChild(lassoWrap);
-        
+
         const lassoBtns = lassoWrap.querySelectorAll('.chroma-lasso-btn');
         lassoBtns.forEach(btn => {
             btn.onclick = () => selectChromaLasso(btn.dataset.mode);
@@ -1020,7 +1126,7 @@ function applyFilters() {
         const keyRGB = hexToRgbArray(chromaKeyColor, 255);
         const threshSq = chromaThreshold * chromaThreshold;
         const fuzzyRange = chromaFuzziness;
-        
+
         // Manual mask data for fast access
         const mData = chromaMaskCtx.getImageData(0, 0, paperWidth, paperHeight).data;
 
@@ -1028,7 +1134,7 @@ function applyFilters() {
             // Check manual mask first: R=255 means add, G=255 means sub
             if (mData[i] > 200) {
                 // Regenerate: keep original alpha
-                continue; 
+                continue;
             } else if (mData[i + 1] > 200) {
                 // Remove: force alpha to 0
                 data[i + 3] = 0;
@@ -1045,7 +1151,7 @@ function applyFilters() {
             } else if (dist < chromaThreshold + fuzzyRange) {
                 alpha = 255 * ((dist - chromaThreshold) / (fuzzyRange || 1));
             }
-            
+
             data[i + 3] = Math.min(data[i + 3], alpha);
         }
     }
@@ -1180,11 +1286,21 @@ function openResizeModal() {
     document.getElementById('resize-width').value = paperWidth;
     document.getElementById('resize-height').value = paperHeight;
 
-    // Reset anchor to mc (center) as requested or keep mc default
     resizeAnchor = 'mc';
     document.querySelectorAll('.anchor-dot').forEach(b => {
         b.classList.toggle('active', b.dataset.anchor === resizeAnchor);
     });
+
+    // Initialize offsets based on center anchor
+    resizeOffsetX = 0;
+    resizeOffsetY = 0;
+    resizeLibre = true;
+    const btn = document.getElementById('toggle-resize-libre');
+    if (btn) {
+        btn.textContent = 'ON';
+        btn.style.background = '#0066ff';
+        btn.style.color = 'white';
+    }
 
     resizePanel.classList.remove('hidden');
     makeDraggable(resizePanel, document.getElementById('resize-header'));
@@ -1195,19 +1311,20 @@ function openResizeModal() {
  * anchor: 'tl' | 'tc' | 'tr' | 'ml' | 'mc' | 'mr' | 'bl' | 'bc' | 'br'
  */
 function resizeCanvas(newW, newH, anchor = 'tl') {
-    // Compute the offset at which old content is pasted into the new canvas
     let ox = 0, oy = 0;
-    const dw = newW - paperWidth;
-    const dh = newH - paperHeight;
-
-    const col = anchor[1]; // 'l', 'c', 'r'
-    const row = anchor[0]; // 't', 'm', 'b'
-
-    if (col === 'c') ox = Math.round(dw / 2);
-    else if (col === 'r') ox = dw;
-
-    if (row === 'm') oy = Math.round(dh / 2);
-    else if (row === 'b') oy = dh;
+    if (resizeLibre) {
+        ox = resizeOffsetX;
+        oy = resizeOffsetY;
+    } else {
+        const dw = newW - paperWidth;
+        const dh = newH - paperHeight;
+        const col = anchor[1]; // 'l', 'c', 'r'
+        const row = anchor[0]; // 't', 'm', 'b'
+        if (col === 'c') ox = Math.round(dw / 2);
+        else if (col === 'r') ox = dw;
+        if (row === 'm') oy = Math.round(dh / 2);
+        else if (row === 'b') oy = dh;
+    }
 
     // Resize each layer
     layers.forEach(l => {
@@ -1517,7 +1634,7 @@ function updateShapeFromCenterUI() {
     if (!shapeFromCenterBtn || !currentBrush) return;
     const type = currentBrush.shapeType;
     const active = (type === 'rect') ? shapeFromCenterRect : shapeFromCenterCircle;
-    
+
     shapeFromCenterBtn.textContent = `DESDE CENTRO: ${active ? 'ON' : 'OFF'}`;
     shapeFromCenterBtn.style.background = active ? '#0066ff' : '';
     shapeFromCenterBtn.style.color = active ? 'white' : '';
@@ -1681,7 +1798,7 @@ function updateFlipButtonsPosition() {
     const handleDist = 40;
     const rotX = b.x + b.w / 2 + Math.sin(modSelRotation) * handleDist;
     const rotY = b.y - Math.cos(modSelRotation) * handleDist;
-    
+
     // We want them to follow the top edge but offset a bit
     const screenPos = worldToScreen(b.x + b.w / 2, b.y - 100);
     flipControls.style.left = `${screenPos.x}px`;
@@ -1717,26 +1834,78 @@ function getSelectionBounds() {
 }
 
 function commitModifySelection() {
-    if (!modSelInitialized || modSelLayersData.length === 0 || !modSelBounds) return;
-    const b = modSelBounds;
+    if (!modSelInitialized || !modSelBounds) return;
 
-    modSelLayersData.forEach(item => {
-        const target = item.layer.ctx;
-        target.save();
-        target.imageSmoothingEnabled = true;
-        target.imageSmoothingQuality = 'high';
+    if (isImportingNewImage) {
+        if (pasteInNewLayer) {
+            // Create the new layer for the imported image
+            const lCanvas = document.createElement('canvas');
+            lCanvas.width = paperWidth; lCanvas.height = paperHeight;
+            const lCtx = lCanvas.getContext('2d', { willReadFrequently: true });
 
-        // Apply transformations to the target layer
-        const cx = b.x + b.w / 2;
-        const cy = b.y + b.h / 2;
-        target.translate(cx, cy);
-        target.rotate(modSelRotation);
-        target.scale(modSelFlipX, modSelFlipY);
-        target.translate(-cx, -cy);
+            const b = modSelBounds;
+            lCtx.save();
+            lCtx.imageSmoothingEnabled = true;
+            lCtx.imageSmoothingQuality = 'high';
+            const cx = b.x + b.w / 2;
+            const cy = b.y + b.h / 2;
+            lCtx.translate(cx, cy);
+            lCtx.rotate(modSelRotation);
+            lCtx.scale(modSelFlipX, modSelFlipY);
+            lCtx.translate(-cx, -cy);
+            lCtx.drawImage(modSelCanvas, Math.round(b.x), Math.round(b.y), Math.round(b.w), Math.round(b.h));
+            lCtx.restore();
 
-        target.drawImage(item.canvas, Math.round(b.x), Math.round(b.y), Math.round(b.w), Math.round(b.h));
-        target.restore();
-    });
+            const newLayer = {
+                id: Date.now(),
+                name: "Imagen Importada",
+                canvas: lCanvas,
+                ctx: lCtx,
+                visible: true,
+                opacity: 1.0,
+                thumbData: '',
+                alphaLocked: false,
+                clippingMask: false,
+                blendMode: 'source-over'
+            };
+            layers.splice(selectedLayerIndex + 1, 0, newLayer);
+            selectedLayerIndex++;
+        } else {
+            // Draw directly onto the current active layer
+            const target = layers[selectedLayerIndex].ctx;
+            const b = modSelBounds;
+            target.save();
+            target.imageSmoothingEnabled = true;
+            target.imageSmoothingQuality = 'high';
+            if (layers[selectedLayerIndex].alphaLocked) target.globalCompositeOperation = 'source-atop';
+            const cx = b.x + b.w / 2;
+            const cy = b.y + b.h / 2;
+            target.translate(cx, cy);
+            target.rotate(modSelRotation);
+            target.scale(modSelFlipX, modSelFlipY);
+            target.translate(-cx, -cy);
+            target.drawImage(modSelCanvas, Math.round(b.x), Math.round(b.y), Math.round(b.w), Math.round(b.h));
+            target.restore();
+        }
+        isImportingNewImage = false;
+    } else {
+        if (modSelLayersData.length === 0) return;
+        const b = modSelBounds;
+        modSelLayersData.forEach(item => {
+            const target = item.layer.ctx;
+            target.save();
+            target.imageSmoothingEnabled = true;
+            target.imageSmoothingQuality = 'high';
+            const cx = b.x + b.w / 2;
+            const cy = b.y + b.h / 2;
+            target.translate(cx, cy);
+            target.rotate(modSelRotation);
+            target.scale(modSelFlipX, modSelFlipY);
+            target.translate(-cx, -cy);
+            target.drawImage(item.canvas, Math.round(b.x), Math.round(b.y), Math.round(b.w), Math.round(b.h));
+            target.restore();
+        });
+    }
 
     modSelInitialized = false; modSelCanvas = null; modSelBounds = null; modSelOrigBounds = null;
     modSelRotation = 0; modSelFlipX = 1; modSelFlipY = 1;
@@ -1823,6 +1992,58 @@ function downloadImage() {
     link.download = 'ilustracion_pro.png';
     link.href = flat.toDataURL('image/png');
     link.click();
+}
+
+function handleIncomingFile(file) {
+    if (!file || !file.type.startsWith('image/')) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+        const img = new Image();
+        img.onload = () => {
+            if (startupImportState === 1 || layers.length === 0) {
+                // If we are at startup or have no layers, start app with this image
+                startApp(img.width, img.height, img);
+                resetImportButton();
+            } else {
+                // App already running, import as new layer
+                importAsNewLayer(img);
+            }
+        };
+        img.src = ev.target.result;
+    };
+    reader.readAsDataURL(file);
+}
+
+function importAsNewLayer(img) {
+    if (modSelInitialized) commitModifySelection();
+    clearSelection();
+
+    // Position at the center of the current screen view
+    const viewCenter = screenToWorld(canvas.width / 2, canvas.height / 2);
+    const x = Math.round(viewCenter.x - img.width / 2);
+    const y = Math.round(viewCenter.y - img.height / 2);
+
+    // Initial transformation setup (No cropping!)
+    modSelCanvas = document.createElement('canvas');
+    modSelCanvas.width = img.width;
+    modSelCanvas.height = img.height;
+    modSelCtx = modSelCanvas.getContext('2d');
+    modSelCtx.drawImage(img, 0, 0);
+
+    modSelBounds = { x, y, w: img.width, h: img.height };
+    modSelOrigBounds = { ...modSelBounds };
+    modSelRotation = 0;
+    modSelFlipX = 1;
+    modSelFlipY = 1;
+    modSelLayersData = [];
+    isImportingNewImage = true;
+    modSelInitialized = true;
+
+    // Trigger Modify Selection mode immediately
+    selectTool('modify-sel', 'Modificar Selección');
+    // initModifySelection is NOT needed because we manually initialized above
+
+    updateThumbnails(); updateLayersUI();
 }
 
 async function copyFlatImageToClipboard() {
@@ -1970,13 +2191,14 @@ async function pasteFromClipboard() {
 
 
 // Handle hit-test for the 8 handles + center move
-const HANDLE_R = 8; // radius in world px
+const HANDLE_R = 10; // visual radius in world px
 function getModifyHandle(wx, wy) {
     if (!modSelBounds) return null;
     const b = modSelBounds;
     const cx = b.x + b.w / 2;
     const cy = b.y + b.h / 2;
-    const hitR = (HANDLE_R + 4) / viewScale; // Added a bit of padding for easier clicking
+    // Hit radius: 15 screen pixels converted to world pixels for easy clicking
+    const hitR = 15 / viewScale;
 
     // 1. Check handles
     const handlePositions = {
@@ -2019,7 +2241,12 @@ function applyModifyDrag(dx, dy, handle, origB, shiftKey = false, worldX = 0, wo
     if (handle === 'rot') {
         const cx = b.x + b.w / 2;
         const cy = b.y + b.h / 2;
-        modSelRotation = Math.atan2(worldY - cy, worldX - cx) + Math.PI / 2;
+        let angle = Math.atan2(worldY - cy, worldX - cx) + Math.PI / 2;
+        if (shiftKey) {
+            const snap = Math.PI / 4; // 45 degrees
+            angle = Math.round(angle / snap) * snap;
+        }
+        modSelRotation = angle;
         return b;
     }
     switch (handle) {
@@ -2068,32 +2295,37 @@ function getCanvasResizeHandle(wx, wy) {
     const nw = resizePreviewW;
     const nh = resizePreviewH;
 
-    // Mirror the anchor-offset logic from the renderer
-    const dw = nw - paperWidth;
-    const dh = nh - paperHeight;
-    const col = resizeAnchor[1];
-    const row = resizeAnchor[0];
     let ox = 0, oy = 0;
-    if (col === 'c') ox = Math.round(dw / 2);
-    else if (col === 'r') ox = dw;
-    if (row === 'm') oy = Math.round(dh / 2);
-    else if (row === 'b') oy = dh;
+    if (resizeLibre) {
+        ox = resizeOffsetX;
+        oy = resizeOffsetY;
+    } else {
+        const dw = nw - paperWidth;
+        const dh = nh - paperHeight;
+        const col = resizeAnchor[1];
+        const row = resizeAnchor[0];
+        if (col === 'c') ox = Math.round(dw / 2);
+        else if (col === 'r') ox = dw;
+        if (row === 'm') oy = Math.round(dh / 2);
+        else if (row === 'b') oy = dh;
+    }
 
     const x0 = -ox, y0 = -oy;
 
-    const handles = {
-        tl: [x0, y0],
-        tc: [x0 + nw / 2, y0],
-        tr: [x0 + nw, y0],
-        ml: [x0, y0 + nh / 2],
-        mr: [x0 + nw, y0 + nh / 2],
-        bl: [x0, y0 + nh],
-        bc: [x0 + nw / 2, y0 + nh],
-        br: [x0 + nw, y0 + nh],
-    };
-    const hitR = HANDLE_R / viewScale;
-    for (const [k, [hx, hy]] of Object.entries(handles)) {
-        if (Math.hypot(wx - hx, wy - hy) <= hitR) return k;
+    // Check if inside the area for moving
+    if (wx >= x0 && wx <= x0 + nw && wy >= y0 && wy <= y0 + nh) {
+        // If it's not a handle, it's a move
+        const handles = {
+            tl: [x0, y0], tc: [x0 + nw / 2, y0], tr: [x0 + nw, y0],
+            ml: [x0, y0 + nh / 2], mr: [x0 + nw, y0 + nh / 2],
+            bl: [x0, y0 + nh], bc: [x0 + nw / 2, y0 + nh], br: [x0 + nw, y0 + nh],
+        };
+        // Hit radius: 20 screen pixels for canvas resize (crucial for usability)
+        const hitR = 20 / viewScale;
+        for (const [k, [hx, hy]] of Object.entries(handles)) {
+            if (Math.hypot(wx - hx, wy - hy) <= hitR) return k;
+        }
+        return 'move';
     }
     return null;
 }
@@ -2111,7 +2343,15 @@ function applyCanvasResizeDrag(dx, dy, handle, origW, origH) {
         case 'bc': nh = origH + dy; break;
         case 'br': nw = origW + dx; nh = origH + dy; break;
     }
-    return { nw: Math.max(1, Math.min(8000, Math.round(nw))), nh: Math.max(1, Math.min(8000, Math.round(nh))) };
+    const finalW = Math.max(1, Math.min(8000, Math.round(nw)));
+    const finalH = Math.max(1, Math.min(8000, Math.round(nh)));
+
+    // Calculate how much the offsets should change to keep opposite edges pinned
+    let dox = 0, doy = 0;
+    if (handle.includes('l')) dox = finalW - origW;
+    if (handle.includes('t')) doy = finalH - origH;
+
+    return { nw: finalW, nh: finalH, dox, doy };
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -2545,7 +2785,7 @@ function applyCursor(drawing) {
 function handlePointerDown(e) {
     if (e.target !== canvas) return;
     screenCursorX = e.offsetX; screenCursorY = e.offsetY;
-    if (e.button !== 0 && e.pointerType === 'mouse') return;
+    if (e.button !== 0 && e.button !== 1 && !isSpacePressed && e.pointerType === 'mouse') return;
     canvas.setPointerCapture(e.pointerId);
     isDrawing = true;
     applyCursor(true);
@@ -2578,8 +2818,12 @@ function handlePointerDown(e) {
             return;
         }
         // Allow zoom/pan tools to continue to their logic below
-        if (currentTool === 'zoom' || currentTool === 'pan' || e.button === 1) { /* ok */ }
+        if (currentTool === 'zoom' || currentTool === 'pan' || e.button === 1 || isSpacePressed) { /* ok */ }
         else return; // Block everything else
+    }
+
+    if (e.button === 1 || isSpacePressed) {
+        currentTool = 'pan';
     }
 
     lastX = world.x; lastY = world.y;
@@ -2603,6 +2847,8 @@ function handlePointerDown(e) {
             resizeActiveHandle = handle;
             resizeStartMouse = { x: world.x, y: world.y };
             resizeStartDim = { w: resizePreviewW, h: resizePreviewH };
+            resizeStartOffsetX = resizeOffsetX;
+            resizeStartOffsetY = resizeOffsetY;
             canvas.setPointerCapture(e.pointerId);
         }
         // Don't activate normal drawing during resize mode
@@ -2660,7 +2906,7 @@ function handlePointerDown(e) {
             drawPoint(lastX, lastY, smoothedPressure);
         }
     }
-    
+
     // Handle Chroma Filter picking
     if (activeFilterType === 'chroma' && chromaLassoMode === 'pick') {
         const color = pickColorAt(world.x, world.y);
@@ -2688,7 +2934,7 @@ function handlePointerMove(e) {
         if (!resizeActiveHandle) {
             const world2 = screenToWorld(e.offsetX, e.offsetY);
             const hov = getCanvasResizeHandle(world2.x, world2.y);
-            const cursorMap = { tl: 'nwse-resize', tc: 'ns-resize', tr: 'nesw-resize', ml: 'ew-resize', mr: 'ew-resize', bl: 'nesw-resize', bc: 'ns-resize', br: 'nwse-resize' };
+            const cursorMap = { tl: 'nwse-resize', tc: 'ns-resize', tr: 'nesw-resize', ml: 'ew-resize', mr: 'ew-resize', bl: 'nesw-resize', bc: 'ns-resize', br: 'nwse-resize', move: 'move' };
             canvas.style.cursor = hov ? (cursorMap[hov] || 'crosshair') : 'default';
         }
         if (resizeActiveHandle) {
@@ -2696,12 +2942,29 @@ function handlePointerMove(e) {
             const world = screenToWorld(e.offsetX, e.offsetY);
             const dx = world.x - resizeStartMouse.x;
             const dy = world.y - resizeStartMouse.y;
-            const res = applyCanvasResizeDrag(dx, dy, resizeActiveHandle, resizeStartDim.w, resizeStartDim.h);
-            resizePreviewW = res.nw;
-            resizePreviewH = res.nh;
-            // Sync back to inputs
-            document.getElementById('resize-width').value = resizePreviewW;
-            document.getElementById('resize-height').value = resizePreviewH;
+
+            if (resizeActiveHandle === 'move') {
+                resizeOffsetX -= dx;
+                resizeOffsetY -= dy;
+                resizeStartMouse = { x: world.x, y: world.y }; // update for next move
+            } else {
+                const res = applyCanvasResizeDrag(dx, dy, resizeActiveHandle, resizeStartDim.w, resizeStartDim.h);
+                resizePreviewW = res.nw;
+                resizePreviewH = res.nh;
+
+                if (resizeLibre) {
+                    // Update offsets to keep the correct edges pinned
+                    // Since we already calculated res.dox/doy based on origW/H
+                    // we need to add the incremental change or reset to start dim.
+                    // To avoid accumulation errors, we use the diff from startDim.
+                    resizeOffsetX = resizeStartOffsetX + res.dox;
+                    resizeOffsetY = resizeStartOffsetY + res.doy;
+                }
+
+                // Sync back to inputs
+                document.getElementById('resize-width').value = resizePreviewW;
+                document.getElementById('resize-height').value = resizePreviewH;
+            }
         }
         return;
     }
@@ -2882,7 +3145,7 @@ function handlePointerUp(e) {
                 chromaMaskCtx.fillStyle = 'black';
             } else {
                 chromaMaskCtx.globalCompositeOperation = 'source-over';
-                chromaMaskCtx.fillStyle = chromaLassoMode === 'add' ? '#FF0000' : '#00FF00'; 
+                chromaMaskCtx.fillStyle = chromaLassoMode === 'add' ? '#FF0000' : '#00FF00';
             }
             chromaMaskCtx.beginPath();
             chromaMaskCtx.moveTo(lassoPath[0].x, lassoPath[0].y);
@@ -2895,6 +3158,16 @@ function handlePointerUp(e) {
     }
 
     isDrawing = false; lassoPath = [];
+    if (currentTool === 'pan') {
+        if (activeFilterType) currentTool = 'none';
+        else {
+            const activeToolName = activeToolIndicator?.textContent || 'Pincel';
+            const t = toolsData.find(x => x.name === activeToolName);
+            if (t) currentTool = t.id;
+            else currentTool = 'pincel';
+        }
+        showSelectionButtons(currentTool);
+    }
     if (currentTool === 'rotate') selectTool('pincel', lastBrushTool);
 }
 
@@ -3181,7 +3454,7 @@ function render() {
         ctx.translate(-cx, -cy);
 
         ctx.drawImage(modSelCanvas, b.x, b.y, b.w, b.h);
-        
+
         // Bounding box (also transformed)
         ctx.strokeStyle = '#ff00ff'; ctx.lineWidth = 2 / viewScale; ctx.setLineDash([]);
         ctx.strokeRect(b.x, b.y, b.w, b.h);
@@ -3190,12 +3463,12 @@ function render() {
         // ── Draw handles & rotation lever ──
         ctx.save();
         const hr = HANDLE_R / viewScale;
-        
+
         // Draw rotation lever (outside primary transform to keep it vertical relative to selection)
         const rotDist = 40 / viewScale;
         const topCenterX = b.x + b.w / 2;
         const topCenterY = b.y;
-        
+
         // Rotate the handle positions logic
         const drawH = (hx, hy) => {
             const dx = hx - cx, dy = hy - cy;
@@ -3210,14 +3483,14 @@ function render() {
         const dxL = leverX - cx, dyL = leverY - cy;
         const rxL = dxL * Math.cos(modSelRotation) - dyL * Math.sin(modSelRotation);
         const ryL = dxL * Math.sin(modSelRotation) + dyL * Math.cos(modSelRotation);
-        
+
         const dxTC = topCenterX - cx, dyTC = topCenterY - cy;
         const rxTC = dxTC * Math.cos(modSelRotation) - dyTC * Math.sin(modSelRotation);
         const ryTC = dxTC * Math.sin(modSelRotation) + dyTC * Math.cos(modSelRotation);
-        
+
         ctx.strokeStyle = '#ff00ff'; ctx.lineWidth = 2 / viewScale;
         ctx.beginPath(); ctx.moveTo(cx + rxTC, cy + ryTC); ctx.lineTo(cx + rxL, cy + ryL); ctx.stroke();
-        
+
         // Lever handle
         ctx.fillStyle = '#ff00ff'; ctx.beginPath(); ctx.arc(cx + rxL, cy + ryL, hr * 1.2, 0, Math.PI * 2); ctx.fill();
         ctx.strokeStyle = 'white'; ctx.stroke();
@@ -3241,16 +3514,20 @@ function render() {
         const nw = resizePreviewW;
         const nh = resizePreviewH;
 
-        // Compute anchor offset: where old content will land in the new canvas
-        const dw = nw - paperWidth;
-        const dh = nh - paperHeight;
-        const col = resizeAnchor[1]; // l, c, r
-        const row = resizeAnchor[0]; // t, m, b
         let ox = 0, oy = 0;
-        if (col === 'c') ox = Math.round(dw / 2);
-        else if (col === 'r') ox = dw;
-        if (row === 'm') oy = Math.round(dh / 2);
-        else if (row === 'b') oy = dh;
+        if (resizeLibre) {
+            ox = resizeOffsetX;
+            oy = resizeOffsetY;
+        } else {
+            const dw = nw - paperWidth;
+            const dh = nh - paperHeight;
+            const col = resizeAnchor[1]; // l, c, r
+            const row = resizeAnchor[0]; // t, m, b
+            if (col === 'c') ox = Math.round(dw / 2);
+            else if (col === 'r') ox = dw;
+            if (row === 'm') oy = Math.round(dh / 2);
+            else if (row === 'b') oy = dh;
+        }
 
         ctx.save();
 
@@ -3277,7 +3554,7 @@ function render() {
         ctx.fillText(`${nw} × ${nh}`, -ox + nw / 2, -oy - 8 / viewScale);
 
         // Handles on the new canvas boundary
-        const hr = HANDLE_R / viewScale;
+        const hr = (HANDLE_R + 2) / viewScale;
         const handlePositions = [
             [-ox, -oy], [-ox + nw / 2, -oy], [-ox + nw, -oy],
             [-ox, -oy + nh / 2], [-ox + nw, -oy + nh / 2],
@@ -3287,9 +3564,12 @@ function render() {
             ctx.fillStyle = 'white';
             ctx.beginPath(); ctx.arc(hx, hy, hr, 0, Math.PI * 2); ctx.fill();
             ctx.strokeStyle = '#0066ff';
-            ctx.lineWidth = 2 / viewScale;
+            ctx.lineWidth = 3 / viewScale; // Thicker border for "physical" feel
             ctx.setLineDash([]);
             ctx.stroke();
+            // Inner dot for more detail
+            ctx.fillStyle = '#0066ff';
+            ctx.beginPath(); ctx.arc(hx, hy, hr * 0.4, 0, Math.PI * 2); ctx.fill();
         });
 
         ctx.restore();
@@ -3520,7 +3800,7 @@ function updateEyedropperPreview(screenX, screenY, worldX, worldY) {
 function handleGlobalShortcuts(e) {
     if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return;
     const key = e.key.toLowerCase();
-    
+
     // Allow Zoom and Pan shortcuts during filters
     if (activeFilterType) {
         const qS = brushTypesData.find(b => b.id === 'lazo-relleno')?.shortcut || 'q';
@@ -3532,7 +3812,7 @@ function handleGlobalShortcuts(e) {
         if (key === wS) { selectChromaLasso('sub'); return; }
         if (key !== 'z' && key !== 'x') return;
     }
-    
+
     const ms = (mainShortcutInput?.value || '').toLowerCase();
     const bs = (brushShortcutInput?.value || '').toLowerCase();
     const ls = (layersShortcutInput?.value || '').toLowerCase();
@@ -3552,7 +3832,33 @@ function handleGlobalShortcuts(e) {
     }
     if (e.ctrlKey && (key === 'z')) { e.preventDefault(); undo(); return; }
     if (e.ctrlKey && (key === 'y' || (e.shiftKey && key === 'z'))) { e.preventDefault(); redo(); return; }
-    if (e.key === 'Escape' && hasSelection) { clearSelection(); return; }
+
+    if (e.key === 'Enter' || e.key === 'Escape') {
+        if (modSelInitialized) {
+            e.preventDefault();
+            commitModifySelection();
+            if (e.key === 'Escape') clearSelection();
+            return;
+        }
+        if (e.key === 'Escape' && hasSelection) {
+            clearSelection();
+            return;
+        }
+    }
+
+    if (e.key === 'Delete' && hasSelection && !modSelInitialized) {
+        e.preventDefault();
+        const l = layers[selectedLayerIndex];
+        l.ctx.save();
+        l.ctx.globalCompositeOperation = 'destination-out';
+        l.ctx.drawImage(selectionCanvas, 0, 0);
+        l.ctx.restore();
+        clearSelection(); // Remove selection mask after deletion
+        updateThumbnails(); updateLayersUI();
+        pushHistory();
+        return;
+    }
+
     const t = toolsData.find(x => (x.shortcut || '').toLowerCase() === key); if (t) selectTool(t.id, t.name);
     const bt = brushTypesData.find(x => (x.shortcut || '').toLowerCase() === key); if (bt) selectTool('pincel', bt.name);
 
