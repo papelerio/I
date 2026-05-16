@@ -7,13 +7,14 @@
     --text-main: #eeeeee;
     --text-dim: #aaaaaa;
     --border-color: rgba(255, 255, 255, 0.12);
-    --accent-color: #3b82f6; /* Modern Blue */
+    --accent-color: #3b82f6;
+    /* Modern Blue */
     --btn-hover: rgba(255, 255, 255, 0.08);
     --btn-active: rgba(255, 255, 255, 0.15);
     --input-bg: #2d2d35;
     --slider-track: #44444a;
     --slider-thumb: #ffffff;
-    
+
     --sidebar-width: 80px;
     --font-main: 'Outfit', sans-serif;
 }
@@ -147,14 +148,19 @@ html {
 
 /* Different Slider Track Colors */
 .slider-container.secondary input[type="range"]::-webkit-slider-runnable-track {
-    background: #e1f5fe; /* Light blue for blur */
+    background: #e1f5fe;
+    /* Light blue for blur */
 }
+
 .slider-container.secondary input[type="range"]::-webkit-slider-thumb {
     background: #03a9f4;
 }
+
 .slider-container.tertiary input[type="range"]::-webkit-slider-runnable-track {
-    background: #f1f8e9; /* Light green for opacity */
+    background: #f1f8e9;
+    /* Light green for opacity */
 }
+
 .slider-container.tertiary input[type="range"]::-webkit-slider-thumb {
     background: #8bc34a;
 }
@@ -189,11 +195,11 @@ html {
     height: 32px;
     object-fit: contain;
     transition: transform 0.2s ease;
-    filter: drop-shadow(0 2px 4px rgba(0,0,0,0.1));
+    filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.1));
 }
 
 body:not(.theme-classic) .tool-btn img {
-    filter: invert(1) brightness(1.5) drop-shadow(0 2px 4px rgba(255,255,255,0.1));
+    filter: invert(1) brightness(1.5) drop-shadow(0 2px 4px rgba(255, 255, 255, 0.1));
 }
 
 .tool-btn:hover {
@@ -501,10 +507,12 @@ body:not(.theme-classic) .tool-btn img {
 .layer-item:hover {
     border-color: var(--accent-color);
 }
+
 .layer-item.dragging {
     opacity: 0.5;
     cursor: grabbing;
 }
+
 .layer-item.drag-over {
     border: 2px dashed #00e5ff !important;
     background: rgba(0, 229, 255, 0.05);
@@ -710,9 +718,17 @@ body:not(.theme-classic) .tool-btn img {
 }
 
 @keyframes pulse-yellow {
-    0% { box-shadow: 0 0 0px rgba(255, 234, 0, 0.7); }
-    50% { box-shadow: 0 0 20px rgba(255, 234, 0, 0.9); }
-    100% { box-shadow: 0 0 0px rgba(255, 234, 0, 0.7); }
+    0% {
+        box-shadow: 0 0 0px rgba(255, 234, 0, 0.7);
+    }
+
+    50% {
+        box-shadow: 0 0 20px rgba(255, 234, 0, 0.9);
+    }
+
+    100% {
+        box-shadow: 0 0 0px rgba(255, 234, 0, 0.7);
+    }
 }
 
 .divider {
@@ -726,7 +742,7 @@ body:not(.theme-classic) .tool-btn img {
 #resize-panel {
     background: rgba(255, 255, 255, 0.98);
     border: 1px solid rgba(0, 0, 0, 0.1);
-    box-shadow: 0 10px 30px rgba(0,0,0,0.15);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
     border-radius: 16px;
     overflow: hidden;
 }
@@ -764,7 +780,7 @@ body:not(.theme-classic) .tool-btn img {
     cursor: pointer;
     transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
     position: relative;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
 }
 
 .anchor-dot:hover {
@@ -860,7 +876,8 @@ body:not(.theme-classic) .tool-btn img {
     align-items: center;
     gap: 8px;
     z-index: 5000;
-    transform: translate(-50%, -120%); /* Position above cursor */
+    transform: translate(-50%, -120%);
+    /* Position above cursor */
 }
 
 #eyedropper-preview .color-circle {
@@ -868,7 +885,7 @@ body:not(.theme-classic) .tool-btn img {
     height: 60px;
     border-radius: 50%;
     border: 4px solid white;
-    box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
     background: #000;
     transition: border-color 0.2s;
 }
@@ -882,14 +899,33 @@ body:not(.theme-classic) .tool-btn img {
 }
 
 @keyframes flash-green-success {
-    0% { border-color: white; transform: scale(1); }
-    50% { border-color: #4caf50; transform: scale(1.15); box-shadow: 0 0 20px rgba(76, 175, 80, 0.6); }
-    100% { border-color: #4caf50; transform: scale(1); }
+    0% {
+        border-color: white;
+        transform: scale(1);
+    }
+
+    50% {
+        border-color: #4caf50;
+        transform: scale(1.15);
+        box-shadow: 0 0 20px rgba(76, 175, 80, 0.6);
+    }
+
+    100% {
+        border-color: #4caf50;
+        transform: scale(1);
+    }
 }
 
 @keyframes fade-out-loupe {
-    from { opacity: 1; transform: translate(-50%, -120%) scale(1); }
-    to { opacity: 0; transform: translate(-50%, -140%) scale(0.8); }
+    from {
+        opacity: 1;
+        transform: translate(-50%, -120%) scale(1);
+    }
+
+    to {
+        opacity: 0;
+        transform: translate(-50%, -140%) scale(0.8);
+    }
 }
 
 #eyedropper-preview .color-hex {
@@ -997,7 +1033,8 @@ body:not(.theme-classic) .tool-btn img {
     border: 1px solid #ddd;
     cursor: pointer;
     transition: transform 0.1s;
-    position: relative; /* For the shortcut badge */
+    position: relative;
+    /* For the shortcut badge */
 }
 
 .palette-cell:hover {
@@ -1016,8 +1053,8 @@ body:not(.theme-classic) .tool-btn img {
     padding: 1px 3px;
     border-radius: 3px;
     pointer-events: none;
-    text-shadow: 0 1px 1px rgba(0,0,0,0.5);
-    border: 1px solid rgba(255,255,255,0.2);
+    text-shadow: 0 1px 1px rgba(0, 0, 0, 0.5);
+    border: 1px solid rgba(255, 255, 255, 0.2);
 }
 
 /* Custom Context Menu */
@@ -1066,59 +1103,87 @@ body:not(.theme-classic) .tool-btn img {
     align-items: center;
     transition: transform 0.15s ease, box-shadow 0.2s ease;
     white-space: nowrap;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
 }
-.indicator-extra-btn:hover  { transform: translateY(-1px); box-shadow: 0 6px 18px rgba(0,0,0,0.2); }
-.indicator-extra-btn:active { transform: scale(0.95); }
-.indicator-extra-btn.hidden { display: none !important; }
+
+.indicator-extra-btn:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.2);
+}
+
+.indicator-extra-btn:active {
+    transform: scale(0.95);
+}
+
+.indicator-extra-btn.hidden {
+    display: none !important;
+}
 
 /* Bucket mode — yellow */
 #bucket-mode-btn {
     background: #FFD600;
     color: #222;
-    box-shadow: 0 4px 12px rgba(255,214,0,0.4);
+    box-shadow: 0 4px 12px rgba(255, 214, 0, 0.4);
 }
-#bucket-mode-btn:hover { box-shadow: 0 6px 18px rgba(255,214,0,0.55); }
+
+#bucket-mode-btn:hover {
+    box-shadow: 0 6px 18px rgba(255, 214, 0, 0.55);
+}
 
 /* Lasso Selector toggle — magenta */
 #lasso-sel-mode-btn {
     background: linear-gradient(135deg, #ff00ff, #cc00cc);
     color: #fff;
-    box-shadow: 0 4px 12px rgba(255,0,255,0.4);
+    box-shadow: 0 4px 12px rgba(255, 0, 255, 0.4);
 }
-#lasso-sel-mode-btn:hover { box-shadow: 0 6px 18px rgba(255,0,255,0.55); }
+
+#lasso-sel-mode-btn:hover {
+    box-shadow: 0 6px 18px rgba(255, 0, 255, 0.55);
+}
 
 /* Lasso Desel toggle — red-orange */
 #lasso-des-mode-btn {
     background: linear-gradient(135deg, #ff4444, #cc0000);
     color: #fff;
-    box-shadow: 0 4px 12px rgba(255,68,68,0.4);
+    box-shadow: 0 4px 12px rgba(255, 68, 68, 0.4);
 }
-#lasso-des-mode-btn:hover { box-shadow: 0 6px 18px rgba(255,68,68,0.55); }
+
+#lasso-des-mode-btn:hover {
+    box-shadow: 0 6px 18px rgba(255, 68, 68, 0.55);
+}
 
 /* Modify scope toggle — cyan */
 #modify-sel-scope-btn {
     background: linear-gradient(135deg, #00e5ff, #00b0cc);
     color: #111;
-    box-shadow: 0 4px 12px rgba(0,229,255,0.4);
+    box-shadow: 0 4px 12px rgba(0, 229, 255, 0.4);
 }
-#modify-sel-scope-btn:hover { box-shadow: 0 6px 18px rgba(0,229,255,0.55); }
+
+#modify-sel-scope-btn:hover {
+    box-shadow: 0 6px 18px rgba(0, 229, 255, 0.55);
+}
 
 /* Fit to Screen (Zoom tool) — blue */
 #fit-screen-btn {
     background: linear-gradient(135deg, #0066ff, #0052cc);
     color: #fff;
-    box-shadow: 0 4px 12px rgba(0,102,255,0.4);
+    box-shadow: 0 4px 12px rgba(0, 102, 255, 0.4);
 }
-#fit-screen-btn:hover { box-shadow: 0 6px 18px rgba(0,102,255,0.55); }
+
+#fit-screen-btn:hover {
+    box-shadow: 0 6px 18px rgba(0, 102, 255, 0.55);
+}
 
 /* Clear selection — dark danger */
 #clear-sel-btn {
     background: linear-gradient(135deg, #1a1a1a, #444);
     color: #fff;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.35);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
 }
-#clear-sel-btn:hover { box-shadow: 0 6px 18px rgba(0,0,0,0.45); }
+
+#clear-sel-btn:hover {
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.45);
+}
 
 /* Layer blend select in layer panel */
 .layer-blend-select {
@@ -1131,6 +1196,7 @@ body:not(.theme-classic) .tool-btn img {
     cursor: pointer;
     width: 100%;
 }
+
 .layer-identity {
     display: flex;
     flex-direction: column;
@@ -1138,6 +1204,7 @@ body:not(.theme-classic) .tool-btn img {
     flex: 1;
     min-width: 0;
 }
+
 .layer-name-input {
     font-size: 11px;
     font-weight: 600;
@@ -1149,6 +1216,7 @@ body:not(.theme-classic) .tool-btn img {
     color: #333;
     padding: 2px 0;
 }
+
 .layer-name-input:focus {
     border-bottom: 1px solid #ccc;
 }
@@ -1166,22 +1234,25 @@ body:not(.theme-classic) .tool-btn img {
     transition: all 0.15s ease;
     white-space: nowrap;
 }
+
 .anchor-btn:hover {
     background: #f0f0f0;
     border-color: #ccc;
     transform: translateY(-1px);
 }
+
 .anchor-btn.active {
     background: #000;
     color: #fff;
     border-color: #000;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.25);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
 }
 
 /* ===== FILTERS MENU ===== */
 #filters-menu {
     width: 260px;
-    bottom: 140px; /* Position it above the layers menu if they overlap */
+    bottom: 140px;
+    /* Position it above the layers menu if they overlap */
 }
 
 .val-display {
@@ -1202,8 +1273,16 @@ body:not(.theme-classic) .tool-btn img {
     cursor: pointer;
     transition: all 0.1s;
 }
-.step-btn:hover { background: #f5f5f5; border-color: #ccc; }
-.step-btn:active { background: #eee; transform: scale(0.95); }
+
+.step-btn:hover {
+    background: #f5f5f5;
+    border-color: #ccc;
+}
+
+.step-btn:active {
+    background: #eee;
+    transform: scale(0.95);
+}
 
 
 
@@ -1266,4 +1345,43 @@ body:not(.theme-classic) .tool-btn img {
     text-align: center;
     line-height: 1.4;
     margin-top: 5px;
+}
+
+/* Floating Flip Buttons */
+.floating-flip-container {
+    position: absolute;
+    display: flex;
+    gap: 12px;
+    z-index: 4000;
+    pointer-events: none; /* Let clicks pass through to the canvas */
+}
+
+.floating-flip-btn {
+    pointer-events: auto; /* Re-enable clicks for the buttons only */
+    width: 36px;
+    height: 36px;
+    background: white;
+    border: 2px solid #ff00ff;
+    border-radius: 50%;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+    transition: transform 0.2s, background 0.2s;
+}
+
+.floating-flip-btn:hover {
+    transform: scale(1.1);
+    background: #fff0ff;
+}
+
+.floating-flip-btn:active {
+    transform: scale(0.9);
+}
+
+.floating-flip-btn img {
+    width: 20px;
+    height: 20px;
+    object-fit: contain;
 }

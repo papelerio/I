@@ -128,7 +128,8 @@ let lassoSelStartX = 0; let lassoSelStartY = 0; // for square mode
 // Shape Tool State
 let shapeStartX = 0, shapeStartY = 0;
 let shapeFill = false;
-let shapeFromCenter = true;
+let shapeFromCenterRect = false;
+let shapeFromCenterCircle = true;
 let shapeFromCenterBtn = null;
 let shapeFillBtn = null;
 
@@ -207,7 +208,7 @@ function captureHistoryState() {
         lastBrushTool,
         modSelInitialized,
         modSelBounds: modSelInitialized ? { ...modSelBounds } : null,
-        modSelCanvasData: (modSelInitialized && modSelCanvas) 
+        modSelCanvasData: (modSelInitialized && modSelCanvas)
             ? modSelCtx.getImageData(0, 0, modSelCanvas.width, modSelCanvas.height)
             : null,
         modSelMode: modifySelMode,
@@ -288,10 +289,10 @@ function restoreHistoryState(snapshot) {
             modSelCanvas.height = snapshot.modSelCanvasData.height;
             modSelCtx = modSelCanvas.getContext('2d');
             modSelCtx.putImageData(snapshot.modSelCanvasData, 0, 0);
-            
+
             modSelLayersData = (snapshot.modSelLayersIndices || []).map(idx => {
                 if (idx >= 0 && idx < layers.length) {
-                    return { layer: layers[idx], canvas: modSelCanvas }; 
+                    return { layer: layers[idx], canvas: modSelCanvas };
                 }
                 return null;
             }).filter(Boolean);
@@ -330,29 +331,29 @@ function redo() {
 
 // Tool Data
 let toolsData = [
-    { id: 'zoom', name: 'Zoom', shortcut: '' },
-    { id: 'pan', name: 'Pan', shortcut: '' },
-    { id: 'rotate', name: 'Girar Lienzo', shortcut: '' },
-    { id: 'bucket', name: 'Cubeta', shortcut: '' },
-    { id: 'lazo-sel', name: 'Lazo Seleccionador', shortcut: '' },
-    { id: 'lazo-des', name: 'Lazo Deseleccionador', shortcut: '' },
-    { id: 'modify-sel', name: 'Modificar Selección', shortcut: '' },
-    { id: 'eyedropper', name: 'Gotero', shortcut: '' },
+    { id: 'zoom', name: 'Zoom', shortcut: 'z' },
+    { id: 'pan', name: 'Pan', shortcut: 'x' },
+    { id: 'rotate', name: 'Girar Lienzo', shortcut: 'r' },
+    { id: 'bucket', name: 'Cubeta', shortcut: 'b' },
+    { id: 'lazo-sel', name: 'Lazo Seleccionador', shortcut: 'n' },
+    { id: 'lazo-des', name: 'Lazo Deseleccionador', shortcut: 'j' },
+    { id: 'modify-sel', name: 'Modificar Selección', shortcut: 'm' },
+    { id: 'eyedropper', name: 'Gotero', shortcut: 't' },
 ];
 const brushTypesData = [
     // size = baseBrushSize default, opacity = 0..1, blur = px
-    { id: 'duro', name: 'Pincel Duro', shortcut: '', hardness: 0.8, useCompositing: true, useTexture: false, size: 2, opacity: 1.00, blur: 0 },
-    { id: 'suave', name: 'Pincel Suave', shortcut: '', hardness: 0.3, useCompositing: false, useTexture: false, size: 3, opacity: 0.11, blur: 0 },
-    { id: 'borrador', name: 'Borrador', shortcut: '', hardness: 0.8, useCompositing: false, useTexture: false, isEraser: true, size: 3, opacity: 1.00, blur: 0 },
-    { id: 'aero-duro', name: 'Aerógrafo Duro', shortcut: '', hardness: 0.8, useCompositing: true, useTexture: false, size: 1, opacity: 1.00, blur: 12 },
-    { id: 'aero-suave', name: 'Aerógrafo Suave', shortcut: '', hardness: 0.2, useCompositing: true, useTexture: true, size: 3, opacity: 1.00, blur: 25 },
-    { id: 'lazo-relleno', name: 'Lazo de Relleno', shortcut: '', hardness: 1.0, isLasso: true, lassoColor: '#ff00ff', size: 10, opacity: 1.00, blur: 0 },
-    { id: 'lazo-borrador', name: 'Lazo Borrador', ashortcut: '', hardness: 1.0, isLasso: true, lassoColor: '#ff0000', isEraser: true, size: 10, opacity: 1.00, blur: 0 },
+    { id: 'duro', name: 'Pincel Duro', shortcut: 'a', hardness: 0.8, useCompositing: true, useTexture: false, size: 2, opacity: 1.00, blur: 0 },
+    { id: 'suave', name: 'Pincel Suave', shortcut: 'c', hardness: 0.3, useCompositing: false, useTexture: false, size: 3, opacity: 0.11, blur: 0 },
+    { id: 'borrador', name: 'Borrador', shortcut: 's', hardness: 0.8, useCompositing: false, useTexture: false, isEraser: true, size: 3, opacity: 1.00, blur: 0 },
+    { id: 'aero-duro', name: 'Aerógrafo Duro', shortcut: 'e', hardness: 0.8, useCompositing: true, useTexture: false, size: 1, opacity: 1.00, blur: 12 },
+    { id: 'aero-suave', name: 'Aerógrafo Suave', shortcut: 'd', hardness: 0.2, useCompositing: true, useTexture: true, size: 3, opacity: 1.00, blur: 25 },
+    { id: 'lazo-relleno', name: 'Lazo de Relleno', shortcut: 'q', hardness: 1.0, isLasso: true, lassoColor: '#ff00ff', size: 10, opacity: 1.00, blur: 0 },
+    { id: 'lazo-borrador', name: 'Lazo Borrador', shortcut: 'w', hardness: 1.0, isLasso: true, lassoColor: '#ff0000', isEraser: true, size: 10, opacity: 1.00, blur: 0 },
     // ── Shape tools ──
-    { id: 'linea', name: 'Línea', shortcut: '', isShape: true, shapeType: 'line', useCompositing: true, useTexture: false, hardness: 1.0, size: 3, opacity: 1.00, blur: 0 },
-    { id: 'rectangulo', name: 'Rectángulo', shortcut: '', isShape: true, shapeType: 'rect', useCompositing: true, useTexture: false, hardness: 1.0, size: 2, opacity: 1.00, blur: 0 },
-    { id: 'circulo', name: 'Círculo / Elipse', shortcut: '', isShape: true, shapeType: 'ellipse', useCompositing: true, useTexture: false, hardness: 1.0, size: 2, opacity: 1.00, blur: 0 },
-    { id: 'push-brush', name: 'Empujar', isPush: true, shortcut: '', size: 5, opacity: 0.5, blur: 0 },
+    { id: 'linea', name: 'Línea', shortcut: 'f', isShape: true, shapeType: 'line', useCompositing: true, useTexture: false, hardness: 1.0, size: 3, opacity: 1.00, blur: 0 },
+    { id: 'rectangulo', name: 'Rectángulo', shortcut: 'g', isShape: true, shapeType: 'rect', useCompositing: true, useTexture: false, hardness: 1.0, size: 2, opacity: 1.00, blur: 0 },
+    { id: 'circulo', name: 'Círculo / Elipse', shortcut: 'h', isShape: true, shapeType: 'ellipse', useCompositing: true, useTexture: false, hardness: 1.0, size: 2, opacity: 1.00, blur: 0 },
+    { id: 'push-brush', name: 'Empujar', isPush: true, shortcut: 'v', size: 5, opacity: 0.5, blur: 0 },
 ];
 
 
@@ -375,7 +376,7 @@ updateTintedTexture();
 
 function resetImportButton() {
     startupImportState = 0;
-    const importBtn = document.getElementById('import-btn');
+    const importBtn = document.getElementById('import-btn');    
     if (importBtn) {
         importBtn.classList.remove('waiting-paste');
         importBtn.textContent = 'Importar imagen';
@@ -395,6 +396,21 @@ function init() {
     canvas.addEventListener('pointermove', handlePointerMove);
     canvas.addEventListener('pointerup', handlePointerUp);
     canvas.addEventListener('pointercancel', handlePointerUp);
+
+    flipControls = document.getElementById('flip-controls');
+    flipHBtn = document.getElementById('flip-h-btn');
+    flipVBtn = document.getElementById('flip-v-btn');
+    if (flipHBtn) flipHBtn.onclick = () => flipSelection('h');
+    if (flipVBtn) flipVBtn.onclick = () => flipSelection('v');
+
+    initPalette();
+    loadShortcuts();
+    setupMultiToolMenu();
+    setupBrushMenu();
+
+    const removeBGBtn = document.getElementById('filter-remove-bg');
+    if (removeBGBtn) removeBGBtn.onclick = applyAIBGRemoval;
+
     requestAnimationFrame(render);
 
     createBtn.onclick = () => {
@@ -501,7 +517,7 @@ function init() {
     document.getElementById('toggle-cursor-mode').onclick = (e) => {
         cursorMode = cursorMode === 'always' ? 'auto' : 'always';
         e.target.textContent = cursorMode === 'always' ? 'SIEMPRE VISIBLE' : 'AUTOMÁTICO';
-        applyCursor(false); 
+        applyCursor(false);
     };
     document.getElementById('toggle-theme').onclick = (e) => {
         currentTheme = currentTheme === 'dark' ? 'classic' : 'dark';
@@ -548,7 +564,7 @@ let activeFilterType = null;
 let filterOriginalImgData = null;
 
 // Curves state
-let curvePoints = [{x: 0, y: 255}, {x: 255, y: 0}];
+let curvePoints = [{ x: 0, y: 255 }, { x: 255, y: 0 }];
 let draggingCurvePoint = null;
 let edgesBgMode = 'transparent';
 let blackWhiteBgMode = 'transparent';
@@ -573,7 +589,7 @@ function openFilterModal(type) {
     } else if (type === 'levels') {
         title.textContent = 'Curvas de Nivel';
         desc.textContent = 'Ajusta el histograma arrastrando los puntos.';
-        curvePoints = [{x: 0, y: 255}, {x: 255, y: 0}]; // Reset to default when opening
+        curvePoints = [{ x: 0, y: 255 }, { x: 255, y: 0 }]; // Reset to default when opening
         addFilterCurveEditor(container);
     } else if (type === 'hue') {
         title.textContent = 'Cambiar Tono';
@@ -594,12 +610,12 @@ function openFilterModal(type) {
 
     filterModal.classList.remove('hidden');
     makeDraggable(filterModal, document.getElementById('filter-header'));
-    
+
     if (type === 'levels') {
         drawFilterHistogram();
         updateCurveUI();
     }
-    
+
     applyFilters();
 }
 
@@ -644,7 +660,7 @@ function addFilterToggle(label, modes, current, onclick) {
     wrap.innerHTML = `
         <label style="font-size:11px; font-weight:700; color:#444;">${label}</label>
         <div style="display:flex; gap:5px; background:#f0f0f0; padding:4px; border-radius:10px;">
-            ${modes.map(m => `<button class="layer-action-btn" style="flex:1; border:none; border-radius:6px; background:${m===current?'#000':'transparent'}; color:${m===current?'#fff':'#666'}; padding:6px; font-size:10px; font-weight:700; cursor:pointer;">${m === 'transparent' ? 'TRANSPARENTE' : 'BLANCO'}</button>`).join('')}
+            ${modes.map(m => `<button class="layer-action-btn" style="flex:1; border:none; border-radius:6px; background:${m === current ? '#000' : 'transparent'}; color:${m === current ? '#fff' : '#666'}; padding:6px; font-size:10px; font-weight:700; cursor:pointer;">${m === 'transparent' ? 'TRANSPARENTE' : 'BLANCO'}</button>`).join('')}
         </div>
     `;
     const btns = wrap.querySelectorAll('button');
@@ -674,10 +690,10 @@ function addFilterCurveEditor(container) {
     container.appendChild(area);
 
     const svg = area.querySelector('#curveSvg');
-    
+
     svg.addEventListener('mousedown', handleCurveMouseDown);
     svg.addEventListener('dblclick', handleCurveDblClick);
-    
+
     // Global listeners for dragging
     window.addEventListener('mousemove', handleCurveMouseMove);
     window.addEventListener('mouseup', handleCurveMouseUp);
@@ -685,7 +701,7 @@ function addFilterCurveEditor(container) {
 
 function getCurveMousePos(e) {
     const svg = document.getElementById('curveSvg');
-    if (!svg) return {x:0, y:0};
+    if (!svg) return { x: 0, y: 0 };
     const rect = svg.getBoundingClientRect();
     return {
         x: Math.round(Math.max(0, Math.min(255, e.clientX - rect.left))),
@@ -702,7 +718,7 @@ function handleCurveMouseDown(e) {
 function handleCurveMouseMove(e) {
     if (draggingCurvePoint === null) return;
     const pos = getCurveMousePos(e);
-    
+
     if (draggingCurvePoint === 0) {
         curvePoints[0].y = pos.y;
     } else if (draggingCurvePoint === curvePoints.length - 1) {
@@ -741,14 +757,14 @@ function updateCurveUI() {
     if (!line || !svg) return;
 
     line.setAttribute('points', curvePoints.map(p => `${p.x},${p.y}`).join(' '));
-    
+
     // Clear old circles
     svg.querySelectorAll('.curve-point').forEach(c => c.remove());
-    
+
     curvePoints.forEach((p, i) => {
         const c = document.createElementNS("http://www.w3.org/2000/svg", "circle");
-        c.setAttribute("cx", p.x); 
-        c.setAttribute("cy", p.y); 
+        c.setAttribute("cx", p.x);
+        c.setAttribute("cy", p.y);
         c.setAttribute("r", 5);
         c.setAttribute("class", "curve-point");
         svg.appendChild(c);
@@ -761,12 +777,12 @@ function drawFilterHistogram() {
     const hCtx = hCanvas.getContext('2d');
     const data = filterOriginalImgData.data;
     const hist = new Array(256).fill(0);
-    
+
     for (let i = 0; i < data.length; i += 4) {
-        const avg = Math.round((data[i] + data[i+1] + data[i+2]) / 3);
+        const avg = Math.round((data[i] + data[i + 1] + data[i + 2]) / 3);
         hist[avg]++;
     }
-    
+
     const max = Math.max(...hist);
     hCtx.clearRect(0, 0, 256, 256);
     hCtx.fillStyle = 'rgba(255, 255, 255, 0.4)';
@@ -805,9 +821,9 @@ function applyFilters() {
         const bPoint = parseInt(sliders[0].value);
         const wPoint = parseInt(sliders[1].value);
         const gamma = parseInt(sliders[2].value) / 10;
-        
+
         for (let i = 0; i < data.length; i += 4) {
-            const origA = data[i+3];
+            const origA = data[i + 3];
             const luma = 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
             let alpha;
             if (luma <= bPoint) alpha = 255;
@@ -821,18 +837,18 @@ function applyFilters() {
             const combinedA = alpha * (origA / 255);
 
             if (blackWhiteBgMode === 'transparent') {
-                data[i] = data[i+1] = data[i+2] = 0;
-                data[i+3] = combinedA;
+                data[i] = data[i + 1] = data[i + 2] = 0;
+                data[i + 3] = combinedA;
             } else {
                 const val = 255 - combinedA;
-                data[i] = data[i+1] = data[i+2] = val;
-                data[i+3] = 255;
+                data[i] = data[i + 1] = data[i + 2] = val;
+                data[i + 3] = 255;
             }
         }
     } else if (activeFilterType === 'levels') {
         const lut = new Uint8Array(256);
         for (let i = 0; i < curvePoints.length - 1; i++) {
-            const p1 = curvePoints[i], p2 = curvePoints[i+1];
+            const p1 = curvePoints[i], p2 = curvePoints[i + 1];
             for (let x = p1.x; x <= p2.x; x++) {
                 const t = (x - p1.x) / (p2.x - p1.x || 1);
                 lut[x] = 255 - (p1.y + t * (p2.y - p1.y));
@@ -856,7 +872,7 @@ function applyFilters() {
         const sens = parseInt(sliders[0].value) / 10;
         const gamma = parseInt(sliders[1].value) / 10;
         const clean = parseInt(sliders[2].value);
-        
+
         const width = paperWidth;
         const height = paperHeight;
         const gray = new Float32Array(width * height);
@@ -864,7 +880,7 @@ function applyFilters() {
 
         // 1. Grayscale pass
         for (let i = 0; i < orig.length; i += 4) {
-            gray[i/4] = 0.299 * orig[i] + 0.587 * orig[i+1] + 0.114 * orig[i+2];
+            gray[i / 4] = 0.299 * orig[i] + 0.587 * orig[i + 1] + 0.114 * orig[i + 2];
         }
 
         // 2. Sobel pass
@@ -872,33 +888,33 @@ function applyFilters() {
             for (let x = 1; x < width - 1; x++) {
                 const i = y * width + x;
                 // Kernels
-                const gx = -gray[i-width-1] + gray[i-width+1] - 2*gray[i-1] + 2*gray[i+1] - gray[i+width-1] + gray[i+width+1];
-                const gy = -gray[i-width-1] - 2*gray[i-width] - gray[i-width+1] + gray[i+width-1] + 2*gray[i+width] + gray[i+width+1];
-                
-                let mag = Math.sqrt(gx*gx + gy*gy) * sens;
+                const gx = -gray[i - width - 1] + gray[i - width + 1] - 2 * gray[i - 1] + 2 * gray[i + 1] - gray[i + width - 1] + gray[i + width + 1];
+                const gy = -gray[i - width - 1] - 2 * gray[i - width] - gray[i - width + 1] + gray[i + width - 1] + 2 * gray[i + width] + gray[i + width + 1];
+
+                let mag = Math.sqrt(gx * gx + gy * gy) * sens;
                 mag = Math.max(0, mag - clean);
                 let alpha = Math.pow(mag / 255, 1 / gamma) * 255;
                 if (alpha > 255) alpha = 255;
 
                 const idx = i * 4;
-                const origA = orig[idx+3];
+                const origA = orig[idx + 3];
                 const combinedA = alpha * (origA / 255);
 
                 if (edgesBgMode === 'transparent') {
-                    data[idx] = data[idx+1] = data[idx+2] = 0;
-                    data[idx+3] = combinedA;
+                    data[idx] = data[idx + 1] = data[idx + 2] = 0;
+                    data[idx + 3] = combinedA;
                 } else {
                     const val = 255 - combinedA;
-                    data[idx] = data[idx+1] = data[idx+2] = val;
-                    data[idx+3] = 255;
+                    data[idx] = data[idx + 1] = data[idx + 2] = val;
+                    data[idx + 3] = 255;
                 }
             }
         }
     } else if (activeFilterType === 'invert') {
         for (let i = 0; i < data.length; i += 4) {
             data[i] = 255 - data[i];
-            data[i+1] = 255 - data[i+1];
-            data[i+2] = 255 - data[i+2];
+            data[i + 1] = 255 - data[i + 1];
+            data[i + 2] = 255 - data[i + 2];
         }
     }
 
@@ -1020,7 +1036,7 @@ function openResizeModal() {
     isResizingCanvas = true;
     resizePreviewW = paperWidth;
     resizePreviewH = paperHeight;
-    
+
     document.getElementById('resize-width').value = paperWidth;
     document.getElementById('resize-height').value = paperHeight;
 
@@ -1345,21 +1361,31 @@ function buildSelectionUI() {
     shapeFromCenterBtn = document.createElement('button');
     shapeFromCenterBtn.id = 'shape-center-btn';
     shapeFromCenterBtn.className = 'indicator-extra-btn hidden';
-    shapeFromCenterBtn.textContent = 'DESDE CENTRO: ON';
-    shapeFromCenterBtn.style.background = '#0066ff';
-    shapeFromCenterBtn.style.color = 'white';
     shapeFromCenterBtn.onclick = () => {
-        shapeFromCenter = !shapeFromCenter;
-        shapeFromCenterBtn.textContent = `DESDE CENTRO: ${shapeFromCenter ? 'ON' : 'OFF'}`;
-        shapeFromCenterBtn.style.background = shapeFromCenter ? '#0066ff' : '';
-        shapeFromCenterBtn.style.color = shapeFromCenter ? 'white' : '';
+        const type = currentBrush.shapeType;
+        if (type === 'rect') {
+            shapeFromCenterRect = !shapeFromCenterRect;
+        } else if (type === 'ellipse') {
+            shapeFromCenterCircle = !shapeFromCenterCircle;
+        }
+        updateShapeFromCenterUI();
     };
     container.appendChild(shapeFromCenterBtn);
 }
 
+function updateShapeFromCenterUI() {
+    if (!shapeFromCenterBtn || !currentBrush) return;
+    const type = currentBrush.shapeType;
+    const active = (type === 'rect') ? shapeFromCenterRect : shapeFromCenterCircle;
+    
+    shapeFromCenterBtn.textContent = `DESDE CENTRO: ${active ? 'ON' : 'OFF'}`;
+    shapeFromCenterBtn.style.background = active ? '#0066ff' : '';
+    shapeFromCenterBtn.style.color = active ? 'white' : '';
+}
+
 function showSelectionButtons(tool) {
     // Hide all extras first
-    [lassoSelBtn, lassoDesBtn, modifySelBtn, clearSelBtn, bucketModeBtn, shapeFillBtn, fitScreenBtn].forEach(b => { if (b) b.classList.add('hidden'); });
+    [lassoSelBtn, lassoDesBtn, modifySelBtn, clearSelBtn, bucketModeBtn, shapeFillBtn, shapeFromCenterBtn, fitScreenBtn].forEach(b => { if (b) b.classList.add('hidden'); });
 
     if (tool === 'lazo-sel') { if (lassoSelBtn) lassoSelBtn.classList.remove('hidden'); if (hasSelection && clearSelBtn) clearSelBtn.classList.remove('hidden'); }
     if (tool === 'lazo-des') { if (lassoDesBtn) lassoDesBtn.classList.remove('hidden'); if (hasSelection && clearSelBtn) clearSelBtn.classList.remove('hidden'); }
@@ -1368,7 +1394,10 @@ function showSelectionButtons(tool) {
     // Show fill toggle for rect & ellipse shapes
     if (tool === 'pincel' && currentBrush.isShape && currentBrush.shapeType !== 'line') {
         if (shapeFillBtn) shapeFillBtn.classList.remove('hidden');
-        if (shapeFromCenterBtn) shapeFromCenterBtn.classList.remove('hidden');
+        if (shapeFromCenterBtn) {
+            shapeFromCenterBtn.classList.remove('hidden');
+            updateShapeFromCenterUI();
+        }
     }
     if (tool === 'zoom') { if (fitScreenBtn) fitScreenBtn.classList.remove('hidden'); }
 }
@@ -1475,7 +1504,49 @@ function initModifySelection() {
         });
     }
     modSelInitialized = true;
+    modSelRotation = 0;
+    modSelFlipX = 1;
+    modSelFlipY = 1;
     updateThumbnails(); updateLayersUI();
+}
+
+function flipSelection(axis) {
+    if (!modSelInitialized) return;
+    if (axis === 'h') modSelFlipX *= -1;
+    else modSelFlipY *= -1;
+    // No history push here yet, we do it at commit or maybe on every flip if we want it undoable
+}
+
+function worldToScreen(wx, wy) {
+    const paperX = wx - paperWidth / 2;
+    const paperY = wy - paperHeight / 2;
+    const cos = Math.cos(viewRotation);
+    const sin = Math.sin(viewRotation);
+    const rx = paperX * cos - paperY * sin;
+    const ry = paperX * sin + paperY * cos;
+    return {
+        x: canvas.width / 2 + viewPosX + rx * viewScale,
+        y: canvas.height / 2 + viewPosY + ry * viewScale
+    };
+}
+
+function updateFlipButtonsPosition() {
+    if (!modSelInitialized || !modSelBounds || !flipControls) {
+        if (flipControls) flipControls.classList.add('hidden');
+        return;
+    }
+    flipControls.classList.remove('hidden');
+    const b = modSelBounds;
+    // Position buttons near the rotation handle (top center)
+    const handleDist = 40;
+    const rotX = b.x + b.w / 2 + Math.sin(modSelRotation) * handleDist;
+    const rotY = b.y - Math.cos(modSelRotation) * handleDist;
+    
+    // We want them to follow the top edge but offset a bit
+    const screenPos = worldToScreen(b.x + b.w / 2, b.y - 100);
+    flipControls.style.left = `${screenPos.x}px`;
+    flipControls.style.top = `${screenPos.y}px`;
+    flipControls.style.transform = `translate(-50%, -100%) rotate(${viewRotation}rad)`;
 }
 
 function captureLayerSelection(layer, bounds) {
@@ -1508,21 +1579,29 @@ function getSelectionBounds() {
 function commitModifySelection() {
     if (!modSelInitialized || modSelLayersData.length === 0 || !modSelBounds) return;
     const b = modSelBounds;
-    
+
     modSelLayersData.forEach(item => {
         const target = item.layer.ctx;
         target.save();
-        // Set high quality smoothing for the final commit
         target.imageSmoothingEnabled = true;
         target.imageSmoothingQuality = 'high';
-        
-        // Round coordinates to avoid sub-pixel blur during the final write
+
+        // Apply transformations to the target layer
+        const cx = b.x + b.w / 2;
+        const cy = b.y + b.h / 2;
+        target.translate(cx, cy);
+        target.rotate(modSelRotation);
+        target.scale(modSelFlipX, modSelFlipY);
+        target.translate(-cx, -cy);
+
         target.drawImage(item.canvas, Math.round(b.x), Math.round(b.y), Math.round(b.w), Math.round(b.h));
         target.restore();
     });
 
     modSelInitialized = false; modSelCanvas = null; modSelBounds = null; modSelOrigBounds = null;
+    modSelRotation = 0; modSelFlipX = 1; modSelFlipY = 1;
     modSelLayersData = [];
+    if (flipControls) flipControls.classList.add('hidden');
     updateThumbnails(); updateLayersUI();
     pushHistory();
 }
@@ -1581,6 +1660,67 @@ function compositeLayers(destCtx) {
             destCtx.restore();
             i++;
         }
+    }
+}
+
+// ─────────────────────────────────────────────────────────────
+//  AI BACKGROUND REMOVAL
+// ─────────────────────────────────────────────────────────────
+async function applyAIBGRemoval() {
+    const layer = layers[selectedLayerIndex];
+    if (!layer) return;
+
+    // UI Feedback
+    const btn = document.getElementById('filter-remove-bg');
+    const originalText = btn.textContent;
+    btn.textContent = "🔮 PROCESANDO...";
+    btn.disabled = true;
+
+    try {
+        // Convert canvas to base64 (stripping the prefix)
+        const base64WithPrefix = layer.canvas.toDataURL('image/png');
+        const base64 = base64WithPrefix.split(',')[1];
+
+        const apiKey = "sk-39d1699b6472ef8d2520b58fc2f1a8bb3b5eb226fbbd886e60a5bb45b5b77e39";
+
+        const res = await fetch("https://api.withoutbg.com/v1.0/image-without-background-base64", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                "X-API-Key": apiKey
+            },
+            body: JSON.stringify({ image_base64: base64 })
+        });
+
+        if (!res.ok) {
+            const errorText = await res.text();
+            throw new Error(`HTTP ${res.status}: ${errorText}`);
+        }
+
+        const data = await res.json();
+        if (!data.img_without_background_base64) throw new Error("La IA no devolvió ninguna imagen.");
+
+        const resultBase64 = "data:image/png;base64," + data.img_without_background_base64;
+
+        const img = new Image();
+        img.onload = () => {
+            // Apply the result to the layer
+            layer.ctx.clearRect(0, 0, paperWidth, paperHeight);
+            layer.ctx.drawImage(img, 0, 0);
+            updateThumbnails();
+            updateLayersUI();
+            pushHistory();
+            btn.textContent = originalText;
+            btn.disabled = false;
+        };
+        img.onerror = () => { throw new Error("Error al cargar la imagen procesada."); };
+        img.src = resultBase64;
+
+    } catch (e) {
+        console.error("Error en RemoveBG:", e);
+        alert("Hubo un problema con la IA: " + e.message);
+        btn.textContent = originalText;
+        btn.disabled = false;
     }
 }
 
@@ -1729,10 +1869,10 @@ async function pasteFromClipboard() {
                             // Definir límites del fantasma
                             modSelBounds = { x, y, w: img.width, h: img.height };
                             modSelOrigBounds = { ...modSelBounds };
-                            
+
                             // IMPORTANTE: Registrar la capa y el canvas para que commitModifySelection sepa dónde guardar
                             modSelLayersData = [{ layer: layers[selectedLayerIndex], canvas: modSelCanvas }];
-                            
+
                             modSelInitialized = true;
 
                             updateThumbnails(); updateLayersUI();
@@ -1755,7 +1895,12 @@ const HANDLE_R = 8; // radius in world px
 function getModifyHandle(wx, wy) {
     if (!modSelBounds) return null;
     const b = modSelBounds;
-    const handles = {
+    const cx = b.x + b.w / 2;
+    const cy = b.y + b.h / 2;
+    const hitR = (HANDLE_R + 4) / viewScale; // Added a bit of padding for easier clicking
+
+    // 1. Check handles
+    const handlePositions = {
         tl: [b.x, b.y],
         tc: [b.x + b.w / 2, b.y],
         tr: [b.x + b.w, b.y],
@@ -1765,17 +1910,39 @@ function getModifyHandle(wx, wy) {
         bc: [b.x + b.w / 2, b.y + b.h],
         br: [b.x + b.w, b.y + b.h],
     };
-    const hitR = HANDLE_R / viewScale;
-    for (const [k, [hx, hy]] of Object.entries(handles)) {
-        if (Math.hypot(wx - hx, wy - hy) <= hitR) return k;
+
+    for (const [k, [hx, hy]] of Object.entries(handlePositions)) {
+        const dx = hx - cx, dy = hy - cy;
+        const rx = dx * Math.cos(modSelRotation) - dy * Math.sin(modSelRotation);
+        const ry = dx * Math.sin(modSelRotation) + dy * Math.cos(modSelRotation);
+        if (Math.hypot(wx - (cx + rx), wy - (cy + ry)) <= hitR) return k;
     }
-    // Check if inside bounds → move
-    if (wx >= b.x && wx <= b.x + b.w && wy >= b.y && wy <= b.y + b.h) return 'move';
+
+    // 2. Check rotation handle
+    const rotDist = 40 / viewScale;
+    const dxL = (b.x + b.w / 2) - cx, dyL = b.y - rotDist - cy;
+    const rxL = dxL * Math.cos(modSelRotation) - dyL * Math.sin(modSelRotation);
+    const ryL = dxL * Math.sin(modSelRotation) + dyL * Math.cos(modSelRotation);
+    if (Math.hypot(wx - (cx + rxL), wy - (cy + ryL)) <= hitR * 1.5) return 'rot';
+
+    // 3. Check if inside bounds (unrotated bounds check is tricky, but let's do a simple inverse transform check)
+    const dx = wx - cx, dy = wy - cy;
+    const invCos = Math.cos(-modSelRotation), invSin = Math.sin(-modSelRotation);
+    const localX = dx * invCos - dy * invSin + cx;
+    const localY = dx * invSin + dy * invCos + cy;
+
+    if (localX >= b.x && localX <= b.x + b.w && localY >= b.y && localY <= b.y + b.h) return 'move';
     return null;
 }
 
-function applyModifyDrag(dx, dy, handle, origB, shiftKey = false) {
+function applyModifyDrag(dx, dy, handle, origB, shiftKey = false, worldX = 0, worldY = 0) {
     const b = { ...origB };
+    if (handle === 'rot') {
+        const cx = b.x + b.w / 2;
+        const cy = b.y + b.h / 2;
+        modSelRotation = Math.atan2(worldY - cy, worldX - cx) + Math.PI / 2;
+        return b;
+    }
     switch (handle) {
         case 'move': b.x += dx; b.y += dy; break;
         case 'tl': b.x += dx; b.y += dy; b.w -= dx; b.h -= dy; break;
@@ -1792,7 +1959,7 @@ function applyModifyDrag(dx, dy, handle, origB, shiftKey = false) {
         const ratio = origB.w / (origB.h || 1);
         const dw = Math.abs(b.w - origB.w);
         const dh = Math.abs(b.h - origB.h);
-        
+
         if (dw / origB.w > dh / (origB.h || 1)) {
             b.h = b.w / ratio;
         } else {
@@ -1914,18 +2081,18 @@ function initPalette() {
         try {
             paletteColors = JSON.parse(saved);
             paletteRows = Math.max(5, Math.ceil(paletteColors.length / paletteCols));
-        } catch (e) { paletteColors = Array(paletteRows * paletteCols).fill(null).map(() => ({c:null, s:null})); }
+        } catch (e) { paletteColors = Array(paletteRows * paletteCols).fill(null).map(() => ({ c: null, s: null })); }
     } else {
         // Try to migrate from old format
         const old = localStorage.getItem('illustrator_palette');
         if (old) {
             try {
                 const colors = JSON.parse(old);
-                paletteColors = colors.map(c => ({c: c, s: null}));
+                paletteColors = colors.map(c => ({ c: c, s: null }));
                 paletteRows = Math.max(5, Math.ceil(paletteColors.length / paletteCols));
-            } catch(e) { paletteColors = Array(paletteRows * paletteCols).fill(null).map(() => ({c:null, s:null})); }
+            } catch (e) { paletteColors = Array(paletteRows * paletteCols).fill(null).map(() => ({ c: null, s: null })); }
         } else {
-            paletteColors = Array(paletteRows * paletteCols).fill(null).map(() => ({c:null, s:null}));
+            paletteColors = Array(paletteRows * paletteCols).fill(null).map(() => ({ c: null, s: null }));
         }
     }
     renderPalette();
@@ -1933,9 +2100,9 @@ function initPalette() {
 function renderPalette() {
     paletteGrid.innerHTML = '';
     paletteColors.forEach((item, index) => {
-        const cell = document.createElement('div'); cell.className = 'palette-cell'; 
+        const cell = document.createElement('div'); cell.className = 'palette-cell';
         if (item && item.c) cell.style.background = item.c;
-        
+
         if (item && item.s) {
             const badge = document.createElement('div');
             badge.className = 'palette-shortcut-badge';
@@ -1944,13 +2111,13 @@ function renderPalette() {
         }
 
         cell.onclick = () => {
-            if (isAddingToPalette) { 
-                paletteColors[index].c = selectedColor; 
-                isAddingToPalette = false; 
-                addToPaletteBtn.classList.remove('active-waiting'); 
-                checkAndExpandPalette(index); 
-                savePalette(); 
-                renderPalette(); 
+            if (isAddingToPalette) {
+                paletteColors[index].c = selectedColor;
+                isAddingToPalette = false;
+                addToPaletteBtn.classList.remove('active-waiting');
+                checkAndExpandPalette(index);
+                savePalette();
+                renderPalette();
             }
             else if (item && item.c) { selectedColor = item.c; mainColorPicker.value = item.c; updateTintedTexture(); }
         };
@@ -1960,16 +2127,16 @@ function renderPalette() {
     });
 }
 function savePalette() { localStorage.setItem('illustrator_palette_v2', JSON.stringify(paletteColors)); }
-function checkAndExpandPalette(index) { if (Math.floor(index / paletteCols) === paletteRows - 1) { paletteRows++; paletteColors = paletteColors.concat(Array(paletteCols).fill(null).map(() => ({c:null, s:null}))); } }
+function checkAndExpandPalette(index) { if (Math.floor(index / paletteCols) === paletteRows - 1) { paletteRows++; paletteColors = paletteColors.concat(Array(paletteCols).fill(null).map(() => ({ c: null, s: null }))); } }
 function showColorContextMenu(x, y, index) {
     const old = document.querySelector('.ctx-menu'); if (old) old.remove();
     const menu = document.createElement('div'); menu.className = 'ctx-menu'; menu.style.left = x + 'px'; menu.style.top = y + 'px';
     const item = paletteColors[index];
-    
-    if (item && item.c) { 
-        const cp = document.createElement('div'); cp.className = 'ctx-item'; cp.textContent = `Copiar ${item.c}`; 
-        cp.onclick = () => { if (navigator.clipboard) navigator.clipboard.writeText(item.c); menu.remove(); }; 
-        menu.appendChild(cp); 
+
+    if (item && item.c) {
+        const cp = document.createElement('div'); cp.className = 'ctx-item'; cp.textContent = `Copiar ${item.c}`;
+        cp.onclick = () => { if (navigator.clipboard) navigator.clipboard.writeText(item.c); menu.remove(); };
+        menu.appendChild(cp);
 
         const sh = document.createElement('div'); sh.className = 'ctx-item'; sh.textContent = 'Asignar Atajo';
         sh.onclick = () => {
@@ -1983,41 +2150,41 @@ function showColorContextMenu(x, y, index) {
         };
         menu.appendChild(sh);
     }
-    
+
     const del = document.createElement('div'); del.className = 'ctx-item delete'; del.textContent = 'Eliminar';
-    del.onclick = () => { paletteColors[index] = {c:null, s:null}; checkAndShrinkPalette(); savePalette(); renderPalette(); menu.remove(); }; menu.appendChild(del);
+    del.onclick = () => { paletteColors[index] = { c: null, s: null }; checkAndShrinkPalette(); savePalette(); renderPalette(); menu.remove(); }; menu.appendChild(del);
     document.body.appendChild(menu); document.addEventListener('click', () => menu.remove(), { once: true });
 }
 
 function checkAndAssignColorShortcut(index, key) {
     const ms = (mainShortcutInput?.value || '').toLowerCase(), bs = (brushShortcutInput?.value || '').toLowerCase(), ls = (layersShortcutInput?.value || '').toLowerCase(), cs = (colorsShortcutInput?.value || '').toLowerCase();
     let conflict = key === ms ? 'Atajo Principal' : key === bs ? 'Atajo Pincel' : key === ls ? 'Atajo Capas' : key === cs ? 'Atajo Colores' : null;
-    
+
     const tc = toolsData.find(t => (t.shortcut || '').toLowerCase() === key);
     const bc = brushTypesData.find(b => (b.shortcut || '').toLowerCase() === key);
     const cc = paletteColors.find((p, idx) => (p.s || '').toLowerCase() === key && idx !== index);
 
-    if (tc) conflict = tc.name; 
+    if (tc) conflict = tc.name;
     else if (bc) conflict = bc.name;
     else if (cc) conflict = `Color en paleta (${cc.c})`;
 
     if (conflict) {
         if (confirm(`La tecla "${key.toUpperCase()}" ya está siendo usada por "${conflict}". ¿Quieres sobrescribirla?`)) {
-            if (key === ms && mainShortcutInput) mainShortcutInput.value = ''; 
+            if (key === ms && mainShortcutInput) mainShortcutInput.value = '';
             if (key === bs && brushShortcutInput) brushShortcutInput.value = '';
-            if (key === ls && layersShortcutInput) layersShortcutInput.value = ''; 
+            if (key === ls && layersShortcutInput) layersShortcutInput.value = '';
             if (key === cs && colorsShortcutInput) colorsShortcutInput.value = '';
-            if (tc) tc.shortcut = ''; 
+            if (tc) tc.shortcut = '';
             if (bc) bc.shortcut = '';
             if (cc) cc.s = null;
-            
+
             paletteColors[index].s = key;
             savePalette(); saveShortcuts(); renderPalette();
             setupMultiToolMenu(); setupBrushMenu();
         }
-    } else { 
-        paletteColors[index].s = key; 
-        savePalette(); renderPalette(); 
+    } else {
+        paletteColors[index].s = key;
+        savePalette(); renderPalette();
     }
 }
 
@@ -2168,8 +2335,8 @@ function updateLayersUI() {
             </div>`;
         li.querySelector('.layer-name-input').onchange = e => { l.name = e.target.value; updateLayersUI(); pushHistory(); }; li.querySelector('.layer-name-input').onclick = e => e.stopPropagation();
         li.querySelector('.layer-blend-select').onchange = e => { l.blendMode = e.target.value; updateLayersUI(); pushHistory(); }; li.querySelector('.layer-blend-select').onclick = e => e.stopPropagation();
-        li.querySelector('.layer-opacity-slider').oninput = e => { l.opacity = e.target.value / 100; updateLayersUI(); }; 
-        li.querySelector('.layer-opacity-slider').addEventListener('pointerup', (e) => { e.target.blur(); pushHistory(); }); 
+        li.querySelector('.layer-opacity-slider').oninput = e => { l.opacity = e.target.value / 100; updateLayersUI(); };
+        li.querySelector('.layer-opacity-slider').addEventListener('pointerup', (e) => { e.target.blur(); pushHistory(); });
         li.querySelector('.layer-opacity-slider').onclick = e => e.stopPropagation();
         li.querySelector('.vis-btn').onclick = e => { e.stopPropagation(); l.visible = !l.visible; updateLayersUI(); pushHistory(); };
         li.querySelector('.alpha-btn').onclick = e => { e.stopPropagation(); l.alphaLocked = !l.alphaLocked; updateLayersUI(); pushHistory(); };
@@ -2240,27 +2407,27 @@ function executePush(worldX, worldY, dx, dy) {
             const worldPX = bX + i;
             const worldPY = bY + j;
             const pos = j * w + i;
-            
+
             const dist = Math.hypot(worldPX - worldX, worldPY - worldY);
             if (dist < radius) {
                 const weight = Math.pow(1 - dist / radius, 1.5);
                 pushGridU[pos] += dx * weight * strength;
                 pushGridV[pos] += dy * weight * strength;
             }
-            
+
             const sx = i - pushGridU[pos];
             const sy = j - pushGridV[pos];
-            
+
             const x0 = Math.floor(sx), x1 = x0 + 1;
             const y0 = Math.floor(sy), y1 = y0 + 1;
             const fx = sx - x0, fy = sy - y0;
-            
+
             const getP = (px, py) => {
-                if (px < 0 || px >= w || py < 0 || py >= h) return [0,0,0,0];
+                if (px < 0 || px >= w || py < 0 || py >= h) return [0, 0, 0, 0];
                 const p = (py * w + px) * 4;
-                return [src[p], src[p+1], src[p+2], src[p+3]];
+                return [src[p], src[p + 1], src[p + 2], src[p + 3]];
             };
-            
+
             const p00 = getP(x0, y0), p10 = getP(x1, y0), p01 = getP(x0, y1), p11 = getP(x1, y1);
             const dPos = pos * 4;
             for (let k = 0; k < 4; k++) {
@@ -2287,7 +2454,7 @@ function screenToWorld(sx, sy) {
 function applyCursor(drawing) {
     // We always hide the system cursor on the canvas because we're drawing a custom one in the render loop
     canvas.style.setProperty('cursor', 'none', 'important');
-    
+
     // Also hide it on the root if drawing to prevent tablet interference
     if (drawing) {
         document.documentElement.style.setProperty('cursor', 'none', 'important');
@@ -2344,7 +2511,7 @@ function handlePointerDown(e) {
     else if (currentTool === 'push') {
         isDrawing = true;
         canvas.setPointerCapture(e.pointerId);
-        
+
         // Prepare High-Quality Push Buffer
         const radius = baseBrushSize * 25;
         const margin = radius + 50;
@@ -2352,12 +2519,12 @@ function handlePointerDown(e) {
         const y = Math.max(0, Math.floor(world.y - margin));
         const w = Math.min(paperWidth - x, Math.ceil(margin * 2));
         const h = Math.min(paperHeight - y, Math.ceil(margin * 2));
-        
+
         pushBounds = { x, y, w, h };
         pushSnapshot = document.createElement('canvas');
         pushSnapshot.width = w; pushSnapshot.height = h;
         pushSnapshot.getContext('2d').drawImage(layers[selectedLayerIndex].canvas, -x, -y);
-        
+
         pushGridU = new Float32Array(w * h);
         pushGridV = new Float32Array(w * h);
     }
@@ -2426,7 +2593,7 @@ function handlePointerMove(e) {
         const oldScale = viewScale;
         viewScale *= 1 + e.movementY * -0.005;
         viewScale = Math.max(0.01, Math.min(20, viewScale));
-        
+
         if (zoomPivotWorld && zoomPivotScreen) {
             // Zoom towards pivot
             const cos = Math.cos(viewRotation);
@@ -2435,7 +2602,7 @@ function handlePointerMove(e) {
             const dy = (zoomPivotWorld.y - paperHeight / 2) * viewScale;
             const rdx = dx * cos - dy * sin;
             const rdy = dx * sin + dy * cos;
-            
+
             viewPosX = zoomPivotScreen.x - canvas.width / 2 - rdx;
             viewPosY = zoomPivotScreen.y - canvas.height / 2 - rdy;
         }
@@ -2447,7 +2614,7 @@ function handlePointerMove(e) {
     }
     else if (currentTool === 'modify-sel' && modSelActive && modSelHandle) {
         const dx = world.x - modSelDragStart.wx; const dy = world.y - modSelDragStart.wy;
-        modSelBounds = applyModifyDrag(dx, dy, modSelHandle, modSelOrigBounds, e.shiftKey);
+        modSelBounds = applyModifyDrag(dx, dy, modSelHandle, modSelOrigBounds, e.shiftKey, world.x, world.y);
     }
     else if (currentTool === 'eyedropper') {
         updateEyedropperPreview(e.offsetX, e.offsetY, world.x, world.y);
@@ -2474,7 +2641,7 @@ function handlePointerMove(e) {
 function handlePointerUp(e) {
     // Release canvas resize drag regardless of isDrawing
     if (resizeActiveHandle) {
-        try { canvas.releasePointerCapture(e.pointerId); } catch(_) {}
+        try { canvas.releasePointerCapture(e.pointerId); } catch (_) { }
         resizeActiveHandle = null;
         canvas.style.cursor = 'default';
         e.preventDefault();
@@ -2503,6 +2670,7 @@ function handlePointerUp(e) {
     }
     else if (currentTool === 'modify-sel') {
         modSelActive = false; modSelHandle = null;
+        updateFlipButtonsPosition();
         pushHistory(); // snapshot AFTER move/resize is settled
     }
     else if (currentTool === 'pincel') {
@@ -2556,7 +2724,7 @@ function handlePointerUp(e) {
             selectedColor = color;
             mainColorPicker.value = color;
             updateTintedTexture();
-            
+
             // Visual feedback: success flash and fade out
             if (eyedropperPreview) {
                 eyedropperPreview.classList.add('copied');
@@ -2639,7 +2807,7 @@ function drawShapeOnCtx(tctx, x1, y1, x2, y2) {
         tctx.stroke();
     } else if (type === 'rect') {
         let rx, ry, rw, rh;
-        if (shapeFromCenter) {
+        if (shapeFromCenterRect) {
             rw = Math.abs(x2 - x1) * 2;
             rh = Math.abs(y2 - y1) * 2;
             rx = x1 - rw / 2;
@@ -2655,7 +2823,7 @@ function drawShapeOnCtx(tctx, x1, y1, x2, y2) {
         else tctx.strokeRect(rx, ry, rw, rh);
     } else if (type === 'ellipse') {
         let cx, cy, radiusX, radiusY;
-        if (shapeFromCenter) {
+        if (shapeFromCenterCircle) {
             cx = x1; cy = y1;
             radiusX = Math.max(1, Math.abs(x2 - x1));
             radiusY = Math.max(1, Math.abs(y2 - y1));
@@ -2725,7 +2893,7 @@ function render() {
     let i = 0;
     while (i < layers.length) {
         const l = layers[i];
-        
+
         // Check if there are layers above clipping to this one
         let next = i + 1;
         let groupCount = 0;
@@ -2740,7 +2908,7 @@ function render() {
             for (let k = i + 1; k < next; k++) {
                 if (layers[k].visible) group.push(layers[k]);
             }
-            
+
             // If the base layer is invisible, the whole clipped stack is invisible
             if (!l.visible) {
                 i = next;
@@ -2764,11 +2932,11 @@ function render() {
                 mctx.globalAlpha = group[k].opacity;
                 mctx.drawImage(group[k].canvas, 0, 0);
                 mctx.restore();
-                
+
                 mctx.globalCompositeOperation = 'destination-in';
                 mctx.drawImage(group[0].canvas, 0, 0);
                 mctx.globalCompositeOperation = 'source-over'; // reset
-                
+
                 gctx.save();
                 gctx.globalCompositeOperation = group[k].blendMode;
                 gctx.drawImage(maskBuffer, 0, 0);
@@ -2813,7 +2981,7 @@ function render() {
                 ctx.globalAlpha = l.opacity;
                 ctx.globalCompositeOperation = l.blendMode;
                 ctx.drawImage(l.canvas, 0, 0);
-                
+
                 if (i === selectedLayerIndex && isDrawing && currentBrush.useCompositing && !currentBrush.isLasso) {
                     mctx.clearRect(0, 0, paperWidth, paperHeight);
                     mctx.globalCompositeOperation = 'source-over';
@@ -2842,35 +3010,77 @@ function render() {
     if (currentTool === 'modify-sel' && modSelInitialized && modSelCanvas && modSelBounds) {
         const b = modSelBounds;
         ctx.save();
-        // Clip to paper bounds so the preview is cut off at the canvas edge
         ctx.beginPath();
         ctx.rect(0, 0, paperWidth, paperHeight);
         ctx.clip();
-        
-        // Use high quality smoothing for the preview
+
         ctx.imageSmoothingEnabled = true;
         ctx.imageSmoothingQuality = 'high';
-        
+
+        // Apply visual transformation
+        const cx = b.x + b.w / 2;
+        const cy = b.y + b.h / 2;
+        ctx.translate(cx, cy);
+        ctx.rotate(modSelRotation);
+        ctx.scale(modSelFlipX, modSelFlipY);
+        ctx.translate(-cx, -cy);
+
         ctx.drawImage(modSelCanvas, b.x, b.y, b.w, b.h);
-        // Bounding box (also clipped)
+        
+        // Bounding box (also transformed)
         ctx.strokeStyle = '#ff00ff'; ctx.lineWidth = 2 / viewScale; ctx.setLineDash([]);
         ctx.strokeRect(b.x, b.y, b.w, b.h);
         ctx.restore();
-        // Handles: drawn outside clip so they remain selectable even near edges
+
+        // ── Draw handles & rotation lever ──
         ctx.save();
         const hr = HANDLE_R / viewScale;
+        
+        // Draw rotation lever (outside primary transform to keep it vertical relative to selection)
+        const rotDist = 40 / viewScale;
+        const topCenterX = b.x + b.w / 2;
+        const topCenterY = b.y;
+        
+        // Rotate the handle positions logic
+        const drawH = (hx, hy) => {
+            const dx = hx - cx, dy = hy - cy;
+            const rx = dx * Math.cos(modSelRotation) - dy * Math.sin(modSelRotation);
+            const ry = dx * Math.sin(modSelRotation) + dy * Math.cos(modSelRotation);
+            ctx.fillStyle = 'white'; ctx.beginPath(); ctx.arc(cx + rx, cy + ry, hr, 0, Math.PI * 2); ctx.fill();
+            ctx.strokeStyle = '#ff00ff'; ctx.lineWidth = 2 / viewScale; ctx.setLineDash([]); ctx.stroke();
+        };
+
+        // Lever line
+        const leverX = topCenterX, leverY = topCenterY - rotDist;
+        const dxL = leverX - cx, dyL = leverY - cy;
+        const rxL = dxL * Math.cos(modSelRotation) - dyL * Math.sin(modSelRotation);
+        const ryL = dxL * Math.sin(modSelRotation) + dyL * Math.cos(modSelRotation);
+        
+        const dxTC = topCenterX - cx, dyTC = topCenterY - cy;
+        const rxTC = dxTC * Math.cos(modSelRotation) - dyTC * Math.sin(modSelRotation);
+        const ryTC = dxTC * Math.sin(modSelRotation) + dyTC * Math.cos(modSelRotation);
+        
+        ctx.strokeStyle = '#ff00ff'; ctx.lineWidth = 2 / viewScale;
+        ctx.beginPath(); ctx.moveTo(cx + rxTC, cy + ryTC); ctx.lineTo(cx + rxL, cy + ryL); ctx.stroke();
+        
+        // Lever handle
+        ctx.fillStyle = '#ff00ff'; ctx.beginPath(); ctx.arc(cx + rxL, cy + ryL, hr * 1.2, 0, Math.PI * 2); ctx.fill();
+        ctx.strokeStyle = 'white'; ctx.stroke();
+
         const handlePositions = [
             [b.x, b.y], [b.x + b.w / 2, b.y], [b.x + b.w, b.y],
             [b.x, b.y + b.h / 2], [b.x + b.w, b.y + b.h / 2],
             [b.x, b.y + b.h], [b.x + b.w / 2, b.y + b.h], [b.x + b.w, b.y + b.h],
         ];
-        handlePositions.forEach(([hx, hy]) => {
-            ctx.fillStyle = 'white'; ctx.beginPath(); ctx.arc(hx, hy, hr, 0, Math.PI * 2); ctx.fill();
-            ctx.strokeStyle = '#ff00ff'; ctx.lineWidth = 2 / viewScale; ctx.setLineDash([]); ctx.stroke();
-        });
+        handlePositions.forEach(([hx, hy]) => drawH(hx, hy));
         ctx.restore();
+
+        // Update flip buttons position
+        updateFlipButtonsPosition();
+    } else {
+        if (flipControls) flipControls.classList.add('hidden');
     }
-    
+
     // ── Draw canvas resize preview ──
     if (isResizingCanvas) {
         const nw = resizePreviewW;
@@ -3032,7 +3242,7 @@ function syncBrushUI() {
 
 function selectTool(id, name) {
     if (currentTool === 'modify-sel' && id !== 'modify-sel' && modSelInitialized) commitModifySelection();
-    
+
     if (isResizingCanvas) {
         isResizingCanvas = false;
         resizePanel.classList.add('hidden');
@@ -3112,7 +3322,7 @@ function updateEyedropperPreview(screenX, screenY, worldX, worldY) {
     if (!eyedropperPreview || eyedropperPreview.classList.contains('copied')) return;
     eyedropperPreview.style.left = screenX + 'px';
     eyedropperPreview.style.top = screenY + 'px';
-    
+
     const color = pickColorAt(worldX, worldY) || '#000000';
     const circle = eyedropperPreview.querySelector('.color-circle');
     const hex = eyedropperPreview.querySelector('.color-hex');
@@ -3138,16 +3348,16 @@ function handleGlobalShortcuts(e) {
     if (key === cfs && cfs !== '') { toggleMenu(configMenu); return; }
 
     if (e.ctrlKey && key === 'c') { e.preventDefault(); copyToClipboard(); return; }
-    if (e.ctrlKey && key === 'v') { 
+    if (e.ctrlKey && key === 'v') {
         if (startupImportState === 1) return; // Let the window 'paste' listener handle it
-        e.preventDefault(); pasteFromClipboard(); return; 
+        e.preventDefault(); pasteFromClipboard(); return;
     }
     if (e.ctrlKey && (key === 'z')) { e.preventDefault(); undo(); return; }
     if (e.ctrlKey && (key === 'y' || (e.shiftKey && key === 'z'))) { e.preventDefault(); redo(); return; }
     if (e.key === 'Escape' && hasSelection) { clearSelection(); return; }
     const t = toolsData.find(x => (x.shortcut || '').toLowerCase() === key); if (t) selectTool(t.id, t.name);
     const bt = brushTypesData.find(x => (x.shortcut || '').toLowerCase() === key); if (bt) selectTool('pincel', bt.name);
-    
+
     // Check palette shortcuts
     const pc = paletteColors.find(p => (p.s || '').toLowerCase() === key);
     if (pc && pc.c) {
@@ -3181,23 +3391,23 @@ function checkAndAssignShortcut(item, key, type) {
     const tc = toolsData.find(t => (t.shortcut || '').toLowerCase() === key && t !== item);
     const bc = brushTypesData.find(b => (b.shortcut || '').toLowerCase() === key && b !== item);
     const cc = paletteColors.find(p => (p.s || '').toLowerCase() === key);
-    
-    if (tc) conflict = tc.name; 
+
+    if (tc) conflict = tc.name;
     else if (bc) conflict = bc.name;
     else if (cc) conflict = `Color en paleta (${cc.c})`;
 
     if (conflict) {
         if (confirm(`La tecla "${key.toUpperCase()}" ya está siendo usada por "${conflict}". ¿Quieres sobrescribirla?`)) {
-            if (key === ms && mainShortcutInput) mainShortcutInput.value = ''; 
+            if (key === ms && mainShortcutInput) mainShortcutInput.value = '';
             if (key === bs && brushShortcutInput) brushShortcutInput.value = '';
-            if (key === ls && layersShortcutInput) layersShortcutInput.value = ''; 
+            if (key === ls && layersShortcutInput) layersShortcutInput.value = '';
             if (key === cs && colorsShortcutInput) colorsShortcutInput.value = '';
-            if (tc) tc.shortcut = ''; 
+            if (tc) tc.shortcut = '';
             else if (bc) bc.shortcut = '';
             if (cc) cc.s = null;
-            
-            item.shortcut = key; 
-            saveShortcuts(); 
+
+            item.shortcut = key;
+            saveShortcuts();
             savePalette();
         }
     } else { item.shortcut = key; saveShortcuts(); }
@@ -3216,13 +3426,13 @@ function loadShortcuts() {
     const saved = localStorage.getItem('illustrator_state_v13'); if (!saved) return;
     try {
         const s = JSON.parse(saved);
-        if (mainShortcutInput) mainShortcutInput.value = s.main || '';
-        if (brushShortcutInput) brushShortcutInput.value = s.brushMenu || '';
-        if (layersShortcutInput) layersShortcutInput.value = s.layersMenu || '';
-        if (colorsShortcutInput) colorsShortcutInput.value = s.colorsMenu || '';
-        if (configShortcutInput) configShortcutInput.value = s.config || 'S';
-        s.tools?.forEach(st => { const t = toolsData.find(x => x.id === st.id); if (t) t.shortcut = st.shortcut; });
-        s.brushes?.forEach(sb => { const b = brushTypesData.find(x => x.id === sb.id); if (b) b.shortcut = sb.shortcut; });
+        if (mainShortcutInput) mainShortcutInput.value = s.main || '+';
+        if (brushShortcutInput) brushShortcutInput.value = s.brushMenu || '}';
+        if (layersShortcutInput) layersShortcutInput.value = s.layersMenu || '.';
+        if (colorsShortcutInput) colorsShortcutInput.value = s.colorsMenu || '-';
+        if (configShortcutInput) configShortcutInput.value = s.config || '{';
+        s.tools?.forEach(st => { const t = toolsData.find(x => x.id === st.id); if (t) t.shortcut = st.shortcut || t.shortcut; });
+        s.brushes?.forEach(sb => { const b = brushTypesData.find(x => x.id === sb.id); if (b) b.shortcut = sb.shortcut || b.shortcut; });
     } catch (e) { }
 }
 
