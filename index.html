@@ -39,11 +39,12 @@
     </div>
 
     <!-- Canvas Resize Panel (Floating) -->
-    <div id="resize-panel" class="floating-menu hidden" style="width: 280px; top: 100px; left: calc(100vw - 310px); bottom: auto; z-index: 3000; background: rgba(255,255,255,0.95); backdrop-filter: blur(5px);">
+    <div id="resize-panel" class="floating-menu hidden"
+        style="width: 280px; top: 100px; left: calc(100vw - 310px); bottom: auto; z-index: 3000; background: rgba(255,255,255,0.95); backdrop-filter: blur(5px);">
         <div class="menu-header" style="cursor: move;" id="resize-header">
             <label>Tamaño del Lienzo</label>
         </div>
-        
+
         <div style="padding: 15px; display: flex; flex-direction: column; gap: 15px;">
             <div class="setup-group">
                 <div class="input-field">
@@ -57,7 +58,9 @@
             </div>
 
             <div class="anchor-grid-container">
-                <label style="font-size:10px; font-weight:700; color:#888; text-align:center; display:block; margin-bottom:8px;">ANCLAR CONTENIDO</label>
+                <label
+                    style="font-size:10px; font-weight:700; color:#888; text-align:center; display:block; margin-bottom:8px;">ANCLAR
+                    CONTENIDO</label>
                 <div class="anchor-grid">
                     <button class="anchor-dot" data-anchor="tl" title="Arriba Izquierda"></button>
                     <button class="anchor-dot" data-anchor="tc" title="Arriba Centro"></button>
@@ -118,7 +121,7 @@
                 <div id="brush-type-menu" class="floating-menu hidden">
                     <div class="menu-header">
                         <label>Atajo Pincel</label>
-                        <input type="text" id="brush-menu-shortcut" maxlength="1" placeholder="-">
+                        <input type="text" id="brush-menu-shortcut" maxlength="1" value="}">
                     </div>
                     <div class="menu-scroll-area">
                         <ul id="brush-types-list"></ul>
@@ -133,7 +136,7 @@
                 <div id="colors-menu" class="floating-menu hidden">
                     <div class="menu-header">
                         <label>Atajo Colores</label>
-                        <input type="text" id="colors-menu-shortcut" maxlength="1" placeholder="-">
+                        <input type="text" id="colors-menu-shortcut" maxlength="1" value="-">
                     </div>
                     <div class="color-picker-section">
                         <input type="color" id="main-color-picker" value="#000000">
@@ -155,11 +158,14 @@
                         <label>Filtros</label>
                     </div>
                     <div class="layers-global-actions">
-                        <button class="layer-action-btn filter-opt-btn" data-filter="blackwhite">Blanco y Negro (Lineart)</button>
+                        <button class="layer-action-btn filter-opt-btn" data-filter="blackwhite">Blanco y Negro
+                            (Lineart)</button>
                         <button class="layer-action-btn filter-opt-btn" data-filter="levels">Curvas de Nivel</button>
                         <button class="layer-action-btn filter-opt-btn" data-filter="hue">Cambiar Tono de Color</button>
-                        <button class="layer-action-btn filter-opt-btn" data-filter="edges">Encontrar Bordes (Lineart)</button>
+                        <button class="layer-action-btn filter-opt-btn" data-filter="edges">Encontrar Bordes
+                            (Lineart)</button>
                         <button class="layer-action-btn filter-opt-btn" data-filter="invert">Invertir Colores</button>
+                        <button class="layer-action-btn" id="filter-remove-bg" style="background: linear-gradient(135deg, #6e8efb, #a777e3); color: white; border: none; font-weight: bold; padding: 12px; margin-top: 5px;">✨ Quitar Fondo (IA)</button>
                     </div>
                 </div>
                 <button class="tool-btn" id="btn-multi" title="Multiherramienta">
@@ -170,7 +176,7 @@
                 <div id="multi-tool-menu" class="floating-menu hidden">
                     <div class="menu-header">
                         <label>Atajo principal</label>
-                        <input type="text" id="main-tool-shortcut" maxlength="1" placeholder="-">
+                        <input type="text" id="main-tool-shortcut" maxlength="1" value="+">
                     </div>
                     <div class="menu-scroll-area">
                         <ul id="tools-list">
@@ -187,7 +193,7 @@
                 <div id="layers-menu" class="floating-menu hidden">
                     <div class="menu-header">
                         <label>Atajo Capas</label>
-                        <input type="text" id="layers-menu-shortcut" maxlength="1" placeholder="-">
+                        <input type="text" id="layers-menu-shortcut" maxlength="1" value=".">
                     </div>
                     <div class="layers-global-actions">
                         <button class="layer-action-btn" id="new-layer-btn">Nueva capa</button>
@@ -248,14 +254,18 @@
         <div id="config-menu" class="floating-menu hidden" style="bottom: 80px; left: 320px;">
             <div class="menu-header">
                 <label>Preferencias</label>
-                <input type="text" id="config-shortcut" maxlength="1" value="S">
+                <input type="text" id="config-shortcut" maxlength="1" value="{">
             </div>
             <div class="menu-scroll-area">
                 <div class="setup-group" style="flex-direction: column; gap: 12px; margin: 10px 0;">
-                    <div class="input-field"><label>MODO DE COPIADO</label><button id="toggle-copy-mode" class="layer-action-btn">POR CAPA</button></div>
-                    <div class="input-field"><label>PEGAR EN NUEVA CAPA</label><button id="toggle-paste-layer" class="layer-action-btn">OFF</button></div>
-                    <div class="input-field"><label>PUNTERO</label><button id="toggle-cursor-mode" class="layer-action-btn">SIEMPRE VISIBLE</button></div>
-                    <div class="input-field"><label>INTERFAZ</label><button id="toggle-theme" class="layer-action-btn">DARK MODE</button></div>
+                    <div class="input-field"><label>MODO DE COPIADO</label><button id="toggle-copy-mode"
+                            class="layer-action-btn">POR CAPA</button></div>
+                    <div class="input-field"><label>PEGAR EN NUEVA CAPA</label><button id="toggle-paste-layer"
+                            class="layer-action-btn">OFF</button></div>
+                    <div class="input-field"><label>PUNTERO</label><button id="toggle-cursor-mode"
+                            class="layer-action-btn">SIEMPRE VISIBLE</button></div>
+                    <div class="input-field"><label>INTERFAZ</label><button id="toggle-theme"
+                            class="layer-action-btn">DARK MODE</button></div>
                     <div class="input-field" style="border-top:1px solid #eee; padding-top:12px; margin-top:4px;">
                         <label>LIENZO</label>
                         <button id="btn-resize-canvas" class="layer-action-btn">Cambiar tamaño</button>
@@ -278,18 +288,28 @@
                 <div class="color-circle"></div>
                 <div class="color-hex">#000000</div>
             </div>
+            <div id="flip-controls" class="floating-flip-container hidden">
+                <button class="floating-flip-btn" id="flip-h-btn" title="Voltear Horizontalmente">
+                    <img src="voltear horizontalmente.png">
+                </button>
+                <button class="floating-flip-btn" id="flip-v-btn" title="Voltear Verticalmente">
+                    <img src="voltear verticalmente.png">
+                </button>
+            </div>
             <canvas id="drawing-canvas"></canvas>
         </main>
     </div>
 
     <!-- Filter Adjustment Panel (Floating) -->
-    <div id="filter-modal" class="floating-menu hidden" style="width: 320px; top: 100px; left: calc(100vw - 350px); bottom: auto; z-index: 3000;">
+    <div id="filter-modal" class="floating-menu hidden"
+        style="width: 320px; top: 100px; left: calc(100vw - 350px); bottom: auto; z-index: 3000;">
         <div class="menu-header" style="cursor: move;" id="filter-header">
             <label id="filter-title">Filtro</label>
         </div>
         <p id="filter-desc" style="font-size: 11px; color: #666; margin: 10px 0;">Ajusta los parámetros.</p>
-        
-        <div id="filter-controls-container" style="display: flex; flex-direction: column; gap: 15px; margin-bottom: 20px;">
+
+        <div id="filter-controls-container"
+            style="display: flex; flex-direction: column; gap: 15px; margin-bottom: 20px;">
             <!-- Sliders with precision buttons will be injected here -->
         </div>
 
