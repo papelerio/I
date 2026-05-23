@@ -232,6 +232,77 @@ body:not(.theme-classic) .tool-btn img {
     border-radius: 0 4px 4px 0;
 }
 
+/* ===== STABILIZER FLOATING SLIDER ===== */
+#stabilizer-container {
+    position: absolute;
+    bottom: 20px;
+    left: 20px;
+    padding: 8px 14px 10px;
+    background: rgba(255, 255, 255, 0.35);
+    backdrop-filter: blur(4px);
+    border: 1px solid rgba(0, 0, 0, 0.08);
+    border-radius: 12px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 5px;
+    z-index: 101;
+    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+    min-width: 160px;
+    pointer-events: auto;
+}
+
+#stabilizer-header {
+    display: flex;
+    justify-content: space-between;
+    width: 100%;
+    font-size: 10px;
+    font-weight: 700;
+    color: #444;
+    padding: 0 2px;
+    gap: 10px;
+}
+
+#stabilizer-value {
+    min-width: 22px;
+    text-align: right;
+    font-size: 10px;
+}
+
+#stabilizer-slider {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 100%;
+    height: 5px;
+    background: #ddd;
+    border-radius: 10px;
+    outline: none;
+    cursor: pointer;
+}
+
+#stabilizer-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 18px;
+    height: 18px;
+    background: #666;
+    border-radius: 50%;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
+    transition: transform 0.1s ease;
+}
+
+#stabilizer-slider::-webkit-slider-thumb:hover {
+    transform: scale(1.2);
+}
+
+#stabilizer-slider::-moz-range-thumb {
+    width: 18px;
+    height: 18px;
+    background: #666;
+    border-radius: 50%;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
+}
+
 /* Canvas Area */
 .canvas-area {
     flex-grow: 1;
@@ -486,6 +557,33 @@ body:not(.theme-classic) .tool-btn img {
     border-color: var(--accent-color);
 }
 
+.layer-action-icon-btn {
+    background: var(--bg-item);
+    border: 1px solid var(--border-color);
+    padding: 10px 6px;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    /* exactly 3 per row: account for gap: 8px between them */
+    flex: 0 0 calc(33.33% - 6px);
+    min-height: 44px;
+}
+
+.layer-action-icon-btn:hover {
+    background: var(--bg-item-hover);
+    border-color: var(--accent-color);
+    transform: scale(1.05);
+}
+
+.layer-action-icon-btn img {
+    width: 42px;
+    height: 42px;
+    object-fit: contain;
+}
+
 #layers-list {
     list-style: none;
     display: flex;
@@ -542,7 +640,19 @@ body:not(.theme-classic) .tool-btn img {
 .layer-name {
     font-size: 12px;
     font-weight: 600;
-    color: var(--text-main);
+    color: #1bc526;
+}
+
+.layer-name-input {
+    font-size: 12px;
+    font-weight: 600;
+    color: #1bc526;
+    background: transparent;
+    border: none;
+    outline: none;
+    font-family: inherit;
+    width: 100px;
+    /* Evitar que empuje otros elementos */
 }
 
 .layer-controls {
@@ -1213,7 +1323,7 @@ body:not(.theme-classic) .tool-btn img {
     font-family: var(--font-main);
     width: 100%;
     outline: none;
-    color: #333;
+    color: #1bc526;
     padding: 2px 0;
 }
 
@@ -1250,9 +1360,57 @@ body:not(.theme-classic) .tool-btn img {
 
 /* ===== FILTERS MENU ===== */
 #filters-menu {
-    width: 260px;
+    width: 420px;
     bottom: 140px;
-    /* Position it above the layers menu if they overlap */
+    padding: 12px;
+}
+
+#filter-icons-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    justify-content: center;
+}
+
+.filter-icon-btn {
+    background: #fff;
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    padding: 12px 8px 8px;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    flex: 0 0 calc(33.33% - 7px);
+    min-width: 0;
+}
+
+.filter-icon-btn:hover {
+    background: #f4ff61;
+    border-color: #f4ff61;
+    transform: scale(1.05);
+}
+
+.filter-icon-btn:active {
+    transform: scale(0.97);
+}
+
+.filter-icon-btn img {
+    width: 52px;
+    height: 52px;
+    object-fit: contain;
+    pointer-events: none;
+}
+
+.filter-icon-btn span {
+    font-size: 10px;
+    font-weight: 600;
+    color: #333;
+    text-align: center;
+    line-height: 1.2;
+    pointer-events: none;
 }
 
 .val-display {

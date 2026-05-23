@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Illustrador Digital Pro</title>
+    <title>ilustrador digital 2026</title>
     <link rel="stylesheet" href="style.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -162,16 +162,35 @@
                     <div class="menu-header">
                         <label>Filtros</label>
                     </div>
-                    <div class="layers-global-actions">
-                        <button class="layer-action-btn filter-opt-btn" data-filter="blackwhite">Blanco y Negro
-                            (Lineart)</button>
-                        <button class="layer-action-btn filter-opt-btn" data-filter="levels">Curvas de Nivel</button>
-                        <button class="layer-action-btn filter-opt-btn" data-filter="hue">Cambiar Tono de Color</button>
-                        <button class="layer-action-btn filter-opt-btn" data-filter="edges">Encontrar Bordes
-                            (Lineart)</button>
-                        <button class="layer-action-btn filter-opt-btn" data-filter="invert">Invertir Colores</button>
-                        <button class="layer-action-btn filter-opt-btn" data-filter="chroma">Quitar Fondo (Chroma
-                            Key)</button>
+                    <div id="filter-icons-grid">
+                        <button class="filter-icon-btn filter-opt-btn" data-filter="blackwhite" title="Blanco y Negro (Lineart)">
+                            <img src="iconos filtros/blanco y negro.png" alt="Blanco y Negro">
+                            <span>Blanco y Negro</span>
+                        </button>
+                        <button class="filter-icon-btn filter-opt-btn" data-filter="levels" title="Curvas de Nivel">
+                            <img src="iconos filtros/curvas de nivel.png" alt="Curvas de Nivel">
+                            <span>Curvas de Nivel</span>
+                        </button>
+                        <button class="filter-icon-btn filter-opt-btn" data-filter="hue" title="Cambiar Tono de Color">
+                            <img src="iconos filtros/cambiar tono.png" alt="Cambiar Tono">
+                            <span>Cambiar Tono</span>
+                        </button>
+                        <button class="filter-icon-btn filter-opt-btn" data-filter="edges" title="Encontrar Bordes (Lineart)">
+                            <img src="iconos filtros/encontrar bordes.png" alt="Encontrar Bordes">
+                            <span>Encontrar Bordes</span>
+                        </button>
+                        <button class="filter-icon-btn filter-opt-btn" data-filter="invert" title="Invertir Colores">
+                            <img src="iconos filtros/invertir colores.png" alt="Invertir Colores">
+                            <span>Invertir Colores</span>
+                        </button>
+                        <button class="filter-icon-btn filter-opt-btn" data-filter="chroma" title="Quitar Fondo (Chroma Key)">
+                            <img src="iconos filtros/quitar fondo.png" alt="Quitar Fondo">
+                            <span>Quitar Fondo</span>
+                        </button>
+                        <button class="filter-icon-btn filter-opt-btn" data-filter="sharpen" title="Marcar Nitidez">
+                            <img src="iconos filtros/marcar nitidez.png" alt="Marcar Nitidez">
+                            <span>Marcar Nitidez</span>
+                        </button>
                     </div>
                 </div>
                 <button class="tool-btn" id="btn-multi" title="Multiherramienta">
@@ -201,11 +220,26 @@
                         <label>Atajo Capas</label>
                         <input type="text" id="layers-menu-shortcut" maxlength="1" value=".">
                     </div>
-                    <div class="layers-global-actions">
-                        <button class="layer-action-btn" id="new-layer-btn">Nueva capa</button>
-                        <button class="layer-action-btn" id="import-layer-btn">Importar imagen</button>
-                        <button class="layer-action-btn" id="insert-layer-btn">Insertar capa desde lienzo</button>
-                        <button class="layer-action-btn" id="toggle-bg-btn">Fondo transparente ON</button>
+                    <div class="layers-global-actions" style="flex-direction: row; flex-wrap: wrap;">
+                        <button class="layer-action-icon-btn" id="new-layer-btn" title="Nueva capa">
+                            <img src="iconos acciones de capas/nueva capa.png" alt="Nueva capa">
+                        </button>
+                        <button class="layer-action-icon-btn" id="duplicate-layer-btn" title="Duplicar capa">
+                            <img src="iconos acciones de capas/duplicar capa.png" alt="Duplicar capa">
+                        </button>
+                        <button class="layer-action-icon-btn" id="import-layer-btn" title="Importar imagen">
+                            <img src="iconos acciones de capas/importar imagen.png" alt="Importar imagen">
+                        </button>
+                        <button class="layer-action-icon-btn" id="insert-layer-btn" title="Insertar capa desde lienzo">
+                            <img src="iconos acciones de capas/insertar capa desde el lienzo.png" alt="Insertar capa">
+                        </button>
+                        <button class="layer-action-icon-btn" id="move-layer-btn" title="Mover contenido de capa">
+                            <img src="iconos acciones de capas/Mover capa.png" alt="Mover capa">
+                        </button>
+                        <button class="layer-action-icon-btn" id="toggle-bg-btn" title="Fondo transparente">
+                            <img id="toggle-bg-icon" src="iconos acciones de capas/fondo transparente ON.png"
+                                alt="Fondo transparente">
+                        </button>
                     </div>
                     <div class="menu-scroll-area">
                         <ul id="layers-list">
@@ -249,10 +283,10 @@
         </div>
 
         <!-- Save Slots Submenu -->
-        <div id="save-slots-menu" class="floating-menu hidden" style="width: 320px; bottom: 80px; left: 320px;">
+        <div id="save-slots-menu" class="floating-menu hidden" style="width: 680px; bottom: 60px; left: 320px;">
             <div class="menu-header"><label>Ranuras de Guardado</label></div>
-            <div class="menu-scroll-area" style="max-height: 450px;">
-                <div id="slots-container" style="display: flex; flex-direction: column; gap: 15px; padding: 10px 0;">
+            <div class="menu-scroll-area" style="max-height: 340px;">
+                <div id="slots-container" style="display: grid; grid-template-columns: 1fr 1fr 1fr 1fr 1fr; gap: 8px; padding: 10px;">
                     <!-- Generated by JS -->
                 </div>
             </div>
@@ -290,6 +324,13 @@
                 <div id="active-tool-indicator">Pincel</div>
                 <button id="bucket-mode-btn" class="indicator-extra-btn hidden">MODO: CAPA</button>
                 <button id="reset-rotation-btn" class="hidden">Rotación original</button>
+            </div>
+            <div id="stabilizer-container">
+                <div id="stabilizer-header">
+                    <span>Estabilizador</span>
+                    <span id="stabilizer-value">0</span>
+                </div>
+                <input type="range" id="stabilizer-slider" min="0" max="15" value="0">
             </div>
             <div id="eyedropper-preview" class="hidden">
                 <div class="color-circle"></div>
