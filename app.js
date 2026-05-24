@@ -838,8 +838,10 @@ function openFilterModal(type) {
         addFilterCurveEditor(container);
     } else if (type === 'hue') {
         title.textContent = 'Cambiar Tono';
-        desc.textContent = 'Cambia el matiz (0-360°).';
-        addFilterSlider('Matiz', 0, 360, 0, (v) => applyFilters());
+        desc.textContent = 'Ajusta tono, saturación y brillo.';
+        addFilterSlider('Tono', 0, 360, 0, (v) => applyFilters());
+        addFilterSlider('Saturación', -100, 100, 0, (v) => applyFilters());
+        addFilterSlider('Brillo', -100, 100, 0, (v) => applyFilters());
     } else if (type === 'edges') {
         title.textContent = 'Encontrar Bordes';
         desc.textContent = 'Genera lineart a partir de los bordes.';
@@ -1189,10 +1191,14 @@ function applyFilters() {
         }
     } else if (activeFilterType === 'hue') {
         const hueShift = parseInt(sliders[0].value);
+        const satAdjust = parseInt(sliders[1].value) / 100;
+        const briAdjust = parseInt(sliders[2].value) / 100;
         for (let i = 0; i < data.length; i += 4) {
             const [r, g, b] = [data[i], data[i + 1], data[i + 2]];
             let [h, s, l] = rgbToHsl(r, g, b);
             h = (h + hueShift) % 360;
+            s = Math.max(0, Math.min(1, s + satAdjust));
+            l = Math.max(0, Math.min(1, l + briAdjust));
             const [nr, ng, nb] = hslToRgb(h, s, l);
             data[i] = nr; data[i + 1] = ng; data[i + 2] = nb;
         }
@@ -1206,33 +1212,32 @@ function applyFilters() {
         const gray = new Float32Array(width * height);
         const orig = filterOriginalImgData.data;
 
-        // 1. Grayscale pass
+        // 1. Grayscale pass (include alpha so transparent boundaries create contrast)
         for (let i = 0; i < orig.length; i += 4) {
-            gray[i / 4] = 0.299 * orig[i] + 0.587 * orig[i + 1] + 0.114 * orig[i + 2];
+            const r = orig[i], g = orig[i + 1], b = orig[i + 2], a = orig[i + 3];
+            const lum = 0.299 * r + 0.587 * g + 0.114 * b;
+            gray[i / 4] = a < 64 ? -2000 : lum;
         }
 
         // 2. Sobel pass
         for (let y = 1; y < height - 1; y++) {
             for (let x = 1; x < width - 1; x++) {
                 const i = y * width + x;
-                // Kernels
                 const gx = -gray[i - width - 1] + gray[i - width + 1] - 2 * gray[i - 1] + 2 * gray[i + 1] - gray[i + width - 1] + gray[i + width + 1];
                 const gy = -gray[i - width - 1] - 2 * gray[i - width] - gray[i - width + 1] + gray[i + width - 1] + 2 * gray[i + width] + gray[i + width + 1];
 
                 let mag = Math.sqrt(gx * gx + gy * gy) * sens;
                 mag = Math.max(0, mag - clean);
-                let alpha = Math.pow(mag / 255, 1 / gamma) * 255;
-                if (alpha > 255) alpha = 255;
+                let edge = Math.pow(mag / 255, 1 / gamma) * 255;
+                if (edge > 255) edge = 255;
 
                 const idx = i * 4;
-                const origA = orig[idx + 3];
-                const combinedA = alpha * (origA / 255);
 
                 if (edgesBgMode === 'transparent') {
                     data[idx] = data[idx + 1] = data[idx + 2] = 0;
-                    data[idx + 3] = combinedA;
+                    data[idx + 3] = edge;
                 } else {
-                    const val = 255 - combinedA;
+                    const val = 255 - edge;
                     data[idx] = data[idx + 1] = data[idx + 2] = val;
                     data[idx + 3] = 255;
                 }
@@ -1332,6 +1337,8 @@ function cancelFilter() {
 }
 
 // Helper: RGB to HSL
+function lerp(a, b, t) { return a + (b - a) * t; }
+
 function rgbToHsl(r, g, b) {
     r /= 255; g /= 255; b /= 255;
     const max = Math.max(r, g, b), min = Math.min(r, g, b);
@@ -2945,6 +2952,17 @@ function updateLayersUI() {
         };
         buttons.appendChild(delBtn);
         controls.appendChild(buttons);
+        const blendSelect = document.createElement('select');
+        blendSelect.className = 'layer-blend-select';
+        blendModes.forEach(bm => {
+            const opt = document.createElement('option');
+            opt.value = bm.value;
+            opt.textContent = bm.label;
+            if (bm.value === l.blendMode) opt.selected = true;
+            blendSelect.appendChild(opt);
+        });
+        blendSelect.onchange = () => { l.blendMode = blendSelect.value; layersCacheDirty = true; requestRender(); };
+        controls.appendChild(blendSelect);
         li.appendChild(controls);
         li.onclick = () => {
             if (selectedLayerIndex !== i) {
@@ -3580,6 +3598,95 @@ function drawPoint(x, y, pressure) {
 }
 
 // ─────────────────────────────────────────────────────────────
+//  PUSH TOOL (high-quality per-pixel displacement)
+// ─────────────────────────────────────────────────────────────
+
+function ensurePushBounds(worldX, worldY) {
+    if (!pushBounds) return;
+    const threshold = baseBrushSize * 12;
+    const { x: bX, y: bY, w, h } = pushBounds;
+    if (worldX >= bX + threshold && worldX <= bX + w - threshold &&
+        worldY >= bY + threshold && worldY <= bY + h - threshold) return;
+
+    const radius = baseBrushSize * 25;
+    const margin = radius + 50;
+    const newX = Math.max(0, Math.floor(worldX - margin));
+    const newY = Math.max(0, Math.floor(worldY - margin));
+    const newW = Math.min(paperWidth - newX, Math.ceil(margin * 2));
+    const newH = Math.min(paperHeight - newY, Math.ceil(margin * 2));
+
+    const newSnapshot = document.createElement('canvas');
+    newSnapshot.width = newW; newSnapshot.height = newH;
+    newSnapshot.getContext('2d').drawImage(layers[selectedLayerIndex].canvas, -newX, -newY);
+
+    pushBounds = { x: newX, y: newY, w: newW, h: newH };
+    pushSnapshot = newSnapshot;
+    pushGridU = new Float32Array(newW * newH);
+    pushGridV = new Float32Array(newW * newH);
+}
+
+function executePush(worldX, worldY, dx, dy) {
+    if (!pushGridU || !pushSnapshot || !pushBounds) return;
+    if (Math.abs(dx) < 0.1 && Math.abs(dy) < 0.1) return;
+
+    ensurePushBounds(worldX, worldY);
+    if (!pushGridU || !pushSnapshot || !pushBounds) return;
+
+    const radius = baseBrushSize * 8;
+    const strength = brushOpacity * 1.5;
+    const l = layers[selectedLayerIndex];
+    const { x: bX, y: bY, w, h } = pushBounds;
+
+    const sourceData = pushSnapshot.getContext('2d').getImageData(0, 0, w, h);
+    const destData = l.ctx.getImageData(bX, bY, w, h);
+    const src = sourceData.data;
+    const dest = destData.data;
+
+    const margin = radius + 2;
+    const iStart = Math.max(0, Math.floor(worldX - bX - margin));
+    const iEnd = Math.min(w, Math.ceil(worldX - bX + margin));
+    const jStart = Math.max(0, Math.floor(worldY - bY - margin));
+    const jEnd = Math.min(h, Math.ceil(worldY - bY + margin));
+
+    for (let j = jStart; j < jEnd; j++) {
+        for (let i = iStart; i < iEnd; i++) {
+            const worldPX = bX + i;
+            const worldPY = bY + j;
+            const pos = j * w + i;
+
+            const dist = Math.hypot(worldPX - worldX, worldPY - worldY);
+            if (dist < radius) {
+                const weight = Math.pow(1 - dist / radius, 1.5);
+                pushGridU[pos] += dx * weight * strength;
+                pushGridV[pos] += dy * weight * strength;
+            }
+
+            const sx = i - pushGridU[pos];
+            const sy = j - pushGridV[pos];
+
+            const x0 = Math.floor(sx), x1 = x0 + 1;
+            const y0 = Math.floor(sy), y1 = y0 + 1;
+            const fx = sx - x0, fy = sy - y0;
+
+            const getP = (px, py) => {
+                if (px < 0 || px >= w || py < 0 || py >= h) return [0, 0, 0, 0];
+                const p = (py * w + px) * 4;
+                return [src[p], src[p + 1], src[p + 2], src[p + 3]];
+            };
+
+            const p00 = getP(x0, y0), p10 = getP(x1, y0), p01 = getP(x0, y1), p11 = getP(x1, y1);
+            const dPos = pos * 4;
+            for (let k = 0; k < 4; k++) {
+                const top = p00[k] + fx * (p10[k] - p00[k]);
+                const bot = p01[k] + fx * (p11[k] - p01[k]);
+                dest[dPos + k] = top + fy * (bot - top);
+            }
+        }
+    }
+    l.ctx.putImageData(destData, bX, bY);
+}
+
+// ─────────────────────────────────────────────────────────────
 //  SHAPE DRAWING HELPERS
 // ─────────────────────────────────────────────────────────────
 /**
@@ -4120,6 +4227,7 @@ function selectTool(id, name) {
         document.querySelectorAll('.chroma-lasso-btn').forEach(b => b.style.boxShadow = '');
     }
     if (currentTool === 'modify-sel' && id !== 'modify-sel' && modSelInitialized) commitModifySelection();
+    if (currentTool === 'push' && id !== 'push' && pushGridU) { pushGridU = null; pushGridV = null; pushSnapshot = null; pushBounds = null; pushHistory(); }
 
     if (isResizingCanvas) {
         isResizingCanvas = false;

@@ -694,8 +694,23 @@ body:not(.theme-classic) .tool-btn img {
 
 .mini-tool-btn img {
     width: 16px;
-    height: 16px;
-    opacity: 0.7;
+}
+
+.layer-blend-select {
+    appearance: none;
+    background: #d0d0d0;
+    color: #000;
+    border: 1px solid #888;
+    border-radius: 4px;
+    padding: 2px 4px;
+    font-size: 10px;
+    cursor: pointer;
+    width: 100%;
+    text-align: center;
+    text-transform: uppercase;
+}
+.layer-blend-select:hover {
+    border-color: #f4ff61;
 }
 
 .mini-tool-btn.delete {
