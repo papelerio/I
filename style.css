@@ -363,6 +363,95 @@ body:not(.theme-classic) .tool-btn img {
     transform: translateY(-50%);
 }
 
+#config-menu {
+    width: 340px;
+    padding: 18px;
+}
+
+#config-menu .menu-header {
+    margin-bottom: 14px;
+}
+
+.config-grid {
+    display: flex;
+    gap: 10px;
+}
+
+.config-grid-large {
+    margin-bottom: 10px;
+}
+
+.config-grid-small {
+    gap: 8px;
+}
+
+.config-card {
+    background: var(--bg-item);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    font-family: inherit;
+    color: var(--text-main);
+}
+
+.config-card:hover {
+    background: var(--bg-item-hover);
+    border-color: var(--accent-color);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+}
+
+.config-card-large {
+    flex: 1;
+    flex-direction: column;
+    padding: 18px 10px;
+    gap: 8px;
+}
+
+.config-card-large img {
+    width: 48px;
+    height: 48px;
+    object-fit: contain;
+}
+
+.config-card-title {
+    font-size: 13px;
+    font-weight: 700;
+    line-height: 1.2;
+}
+
+.config-card-small {
+    flex: 1;
+    flex-direction: column;
+    padding: 12px 6px;
+    gap: 4px;
+    min-height: 100px;
+}
+
+.config-card-small img {
+    width: 36px;
+    height: 36px;
+    object-fit: contain;
+}
+
+.config-card-label {
+    font-size: 10px;
+    font-weight: 600;
+    color: #888;
+    line-height: 1.1;
+}
+
+.config-card-value {
+    font-size: 11px;
+    font-weight: 700;
+    line-height: 1.1;
+}
+
 .floating-menu::before {
     content: '';
     position: absolute;
@@ -576,6 +665,12 @@ body:not(.theme-classic) .tool-btn img {
     background: var(--bg-item-hover);
     border-color: var(--accent-color);
     transform: scale(1.05);
+}
+
+.layer-action-icon-btn.waiting-paste {
+    background: #ffea00;
+    box-shadow: 0 0 15px rgba(255, 234, 0, 0.5);
+    animation: pulse-yellow 1.5s infinite;
 }
 
 .layer-action-icon-btn img {

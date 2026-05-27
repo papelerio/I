@@ -52,6 +52,8 @@ const createBtn = document.getElementById('create-btn');
 const importBtn = document.getElementById('import-btn');
 const fileInput = document.getElementById('file-input');
 let startupImportState = 0; // 0: default, 1: waiting for paste
+let layerImportState = 0; // 0: default, 1: waiting for paste (layers panel)
+let isDraggingLayer = false; // true while an internal layer drag-and-drop is in progress
 
 // Logical Canvas Size
 let paperWidth = 1920; let paperHeight = 1080;
@@ -250,6 +252,12 @@ let isImportingNewImage = false; // flag for ghost import
 let flipControls = null;
 let flipHBtn = null;
 let flipVBtn = null;
+let modSelPerspectiveMode = false; // true = 4-corner perspective warp mode
+let perspCorners = null; // [{ x, y }, ...] TL, TR, BL, BR in world coords
+let perspDragCorner = null; // index of corner being dragged (0-3) or 'move'
+let perspDragStart = null; // { wx, wy } world coords at drag start
+let perspCornersAtDragStart = null; // snapshot of corners when drag began
+let perspBtn = null; // reference to the perspective toggle button
 
 // Canvas Resize State
 let isResizingCanvas = false;
@@ -279,8 +287,6 @@ let blurTempCanvas = document.createElement('canvas');
 let blurTempCtx = blurTempCanvas.getContext('2d');
 let bleedCanvas = document.createElement('canvas');
 let bleedCtx = bleedCanvas.getContext('2d');
-let currentTheme = 'dark';
-
 // ─────────────────────────────────────────────────────────────
 // TOOL STATE
 // ─────────────────────────────────────────────────────────────
@@ -514,6 +520,12 @@ function resetImportButton() {
     }
 }
 
+function resetLayerImportButton() {
+    layerImportState = 0;
+    const btn = document.getElementById('import-layer-btn');
+    if (btn) btn.classList.remove('waiting-paste');
+}
+
 // ─────────────────────────────────────────────────────────────
 //  INIT
 // ─────────────────────────────────────────────────────────────
@@ -560,6 +572,18 @@ function init() {
     if (flipHBtn) flipHBtn.onclick = () => flipSelection('h');
     if (flipVBtn) flipVBtn.onclick = () => flipSelection('v');
 
+    // Perspective button (created dynamically, placed alongside flip buttons)
+    if (flipControls) {
+        perspBtn = document.createElement('button');
+        perspBtn.className = 'floating-flip-btn';
+        perspBtn.id = 'perspective-mode-btn';
+        perspBtn.title = 'Modo Perspectiva';
+        perspBtn.innerHTML = `<img src="perspectiva.png" style="width:28px;height:28px;object-fit:contain;">`;
+        perspBtn.style.cssText = 'background:rgba(30,30,40,0.9); border:1px solid rgba(255,255,255,0.2); color:white; padding:8px; cursor:pointer; border-radius:10px; transition:all 0.2s;';
+        perspBtn.onclick = togglePerspectiveMode;
+        flipControls.appendChild(perspBtn);
+    }
+
     initPalette();
     loadShortcuts();
     setupMultiToolMenu();
@@ -582,10 +606,11 @@ function init() {
         }
     };
 
-    // Drag & Drop
+    // Drag & Drop (external files only — internal layer drags are ignored via isDraggingLayer)
     window.addEventListener('dragover', (e) => e.preventDefault());
     window.addEventListener('drop', (e) => {
         e.preventDefault();
+        if (isDraggingLayer) return; // internal layer reorder — do nothing here
         const files = e.dataTransfer.files;
         if (files && files.length > 0) {
             handleIncomingFile(files[0]);
@@ -669,8 +694,14 @@ function init() {
     document.getElementById('new-layer-btn').onclick = () => addLayer("Nueva Capa");
     document.getElementById('duplicate-layer-btn').onclick = duplicateSelectedLayer;
     document.getElementById('import-layer-btn').onclick = () => {
-        toggleMenu(null); // Close menu
-        fileInput.click();
+        if (layerImportState === 0) {
+            layerImportState = 1;
+            document.getElementById('import-layer-btn').classList.add('waiting-paste');
+        } else {
+            resetLayerImportButton();
+            toggleMenu(null);
+            fileInput.click();
+        }
     };
     document.getElementById('insert-layer-btn').onclick = () => addLayer("Capa desde lienzo", true);
     document.getElementById('toggle-bg-btn').onclick = toggleBackground;
@@ -710,25 +741,17 @@ function init() {
         const labels = ['POR CAPA', 'TODAS LAS CAPAS', 'LIENZO COMPLETO'];
         const next = (modes.indexOf(copyMode) + 1) % modes.length;
         copyMode = modes[next];
-        e.target.textContent = labels[next];
+        document.getElementById('copy-mode-value').textContent = labels[next];
     };
     document.getElementById('toggle-paste-layer').onclick = (e) => {
         pasteInNewLayer = !pasteInNewLayer;
-        e.target.textContent = pasteInNewLayer ? 'ON' : 'OFF';
+        document.getElementById('paste-layer-value').textContent = pasteInNewLayer ? 'ON' : 'OFF';
     };
     document.getElementById('toggle-cursor-mode').onclick = (e) => {
         cursorMode = cursorMode === 'always' ? 'auto' : 'always';
-        e.target.textContent = cursorMode === 'always' ? 'SIEMPRE VISIBLE' : 'AUTOMÁTICO';
+        document.getElementById('cursor-mode-value').textContent = cursorMode === 'always' ? 'SIEMPRE VISIBLE' : 'AUTOMÁTICO';
         applyCursor(false);
     };
-    document.getElementById('toggle-theme').onclick = (e) => {
-        currentTheme = currentTheme === 'dark' ? 'classic' : 'dark';
-        applyTheme();
-    };
-
-    // Initialize Theme
-    currentTheme = localStorage.getItem('illustrator_theme') || 'dark';
-    applyTheme();
 
     // Resize Canvas
     document.getElementById('btn-resize-canvas').onclick = () => { openResizeModal(); toggleMenu(null); };
@@ -754,9 +777,10 @@ function init() {
 
     // Fullscreen
     const fsBtn = document.getElementById('btn-fullscreen');
+    const fsTitle = document.getElementById('fullscreen-title');
     fsBtn.onclick = () => toggleFullscreen();
     document.addEventListener('fullscreenchange', () => {
-        fsBtn.textContent = document.fullscreenElement ? 'Salir de pantalla completa' : 'Pantalla completa';
+        fsTitle.textContent = document.fullscreenElement ? 'Salir de pantalla completa' : 'Pantalla completa';
     });
 
     // Build floating selection UI buttons (hidden by default)
@@ -764,18 +788,6 @@ function init() {
 
     initPalette(); loadShortcuts(); setupMultiToolMenu(); setupBrushMenu();
     applyCursor(false);
-}
-
-function applyTheme() {
-    const btn = document.getElementById('toggle-theme');
-    if (currentTheme === 'dark') {
-        document.body.classList.remove('theme-classic');
-        if (btn) btn.textContent = 'DARK MODE';
-    } else {
-        document.body.classList.add('theme-classic');
-        if (btn) btn.textContent = 'INTERFAZ CLÁSICA';
-    }
-    localStorage.setItem('illustrator_theme', currentTheme);
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -857,6 +869,14 @@ function openFilterModal(type) {
         title.textContent = 'Marcar Nitidez';
         desc.textContent = 'Aumenta la nitidez y el contraste en los bordes.';
         addFilterSlider('Fuerza', 1, 100, 50, (v) => applyFilters());
+    } else if (type === 'gauss') {
+        title.textContent = 'Difuminado Gaussiano';
+        desc.textContent = 'Aplica un desenfoque gaussiano a toda la capa.';
+        addFilterSlider('Radio', 1, 50, 5, (v) => applyFilters());
+    } else if (type === 'posterize') {
+        title.textContent = 'Posterizar';
+        desc.textContent = 'Reduce la cantidad de colores por canal.';
+        addFilterSlider('Niveles', 2, 32, 6, (v) => applyFilters());
     } else if (type === 'chroma') {
         title.textContent = 'Quitar Fondo (Chroma Key)';
         desc.textContent = 'Selecciona un color para volverlo transparente. Usa los lazos para refinar.';
@@ -1273,6 +1293,29 @@ function applyFilters() {
                 }
                 data[i + 3] = orig[i + 3]; // keep alpha
             }
+        }
+    } else if (activeFilterType === 'gauss') {
+        const radius = Math.min(parseInt(sliders[0].value), 200);
+        const tmpCanvas = document.createElement('canvas');
+        tmpCanvas.width = paperWidth;
+        tmpCanvas.height = paperHeight;
+        const tmpCtx = tmpCanvas.getContext('2d');
+        tmpCtx.putImageData(filterOriginalImgData, 0, 0);
+
+        l.ctx.save();
+        l.ctx.clearRect(0, 0, paperWidth, paperHeight);
+        l.ctx.filter = `blur(${radius}px)`;
+        l.ctx.drawImage(tmpCanvas, 0, 0);
+        l.ctx.restore();
+        requestRender();
+        return; // skip the generic putImageData at the end
+    } else if (activeFilterType === 'posterize') {
+        const levels = parseInt(sliders[0].value);
+        const step = 255 / (levels - 1);
+        for (let i = 0; i < data.length; i += 4) {
+            data[i]     = Math.round(data[i]     / step) * step;
+            data[i + 1] = Math.round(data[i + 1] / step) * step;
+            data[i + 2] = Math.round(data[i + 2] / step) * step;
         }
     } else if (activeFilterType === 'chroma') {
         const keyRGB = hexToRgbArray(chromaKeyColor, 255);
@@ -1968,8 +2011,47 @@ function flipSelection(axis) {
     if (!modSelInitialized) return;
     if (axis === 'h') modSelFlipX *= -1;
     else modSelFlipY *= -1;
-    // No history push here yet, we do it at commit or maybe on every flip if we want it undoable
     requestRender();
+}
+
+function togglePerspectiveMode() {
+    if (!modSelInitialized) return;
+    modSelPerspectiveMode = !modSelPerspectiveMode;
+    if (modSelPerspectiveMode) {
+        initPerspectiveCorners();
+        if (perspBtn) {
+            perspBtn.style.background = 'rgba(80,130,255,0.9)';
+            perspBtn.style.boxShadow = '0 0 12px rgba(80,130,255,0.6)';
+        }
+    } else {
+        perspCorners = null;
+        if (perspBtn) {
+            perspBtn.style.background = 'rgba(30,30,40,0.9)';
+            perspBtn.style.boxShadow = '';
+        }
+    }
+    requestRender();
+}
+
+function initPerspectiveCorners() {
+    if (!modSelBounds) return;
+    const b = modSelBounds;
+    const cx = b.x + b.w / 2, cy = b.y + b.h / 2;
+    // Derive rotated corner positions from the current bounding box + rotation
+    const corners = [
+        { lx: b.x,       ly: b.y },
+        { lx: b.x + b.w, ly: b.y },
+        { lx: b.x,       ly: b.y + b.h },
+        { lx: b.x + b.w, ly: b.y + b.h },
+    ];
+    perspCorners = corners.map(({ lx, ly }) => {
+        const dx = lx - cx, dy = ly - cy;
+        const cos = Math.cos(modSelRotation), sin = Math.sin(modSelRotation);
+        return {
+            x: cx + dx * cos - dy * sin,
+            y: cy + dx * sin + dy * cos
+        };
+    });
 }
 
 function worldToScreen(wx, wy) {
@@ -2031,8 +2113,166 @@ function getSelectionBounds() {
     return { x: minX, y: minY, w: maxX - minX + 1, h: maxY - minY + 1 };
 }
 
+// ─────────────────────────────────────────────────────────────
+//  PERSPECTIVE WARP RENDERER (bilinear scanline)
+// ─────────────────────────────────────────────────────────────
+/**
+ * Draws an affine-mapped triangle from the source image onto the canvas.
+ * Expands the clipping path slightly to hide Canvas 2D antialiasing seams.
+ */
+function drawTexturedTriangle(ctx, img, u0, v0, u1, v1, u2, v2, x0, y0, x1, y1, x2, y2) {
+    ctx.save();
+    
+    // 1. Create expanded clipping path to avoid seams (líneas entrecortadas)
+    const cx = (x0 + x1 + x2) / 3;
+    const cy = (y0 + y1 + y2) / 3;
+    const pad = 0.8; // Expand by 0.8px outwards
+    
+    const ex = (x, y) => {
+        const dx = x - cx, dy = y - cy;
+        const dist = Math.hypot(dx, dy) || 1;
+        return [x + (dx / dist) * pad, y + (dy / dist) * pad];
+    };
+    
+    const [px0, py0] = ex(x0, y0);
+    const [px1, py1] = ex(x1, y1);
+    const [px2, py2] = ex(x2, y2);
+
+    ctx.beginPath();
+    ctx.moveTo(px0, py0);
+    ctx.lineTo(px1, py1);
+    ctx.lineTo(px2, py2);
+    ctx.closePath();
+    ctx.clip();
+
+    // 2. Compute the affine transformation matrix
+    const det = (u0 - u2) * (v1 - v2) - (u1 - u2) * (v0 - v2);
+    if (Math.abs(det) < 0.0001) { ctx.restore(); return; }
+    
+    const a = ((x0 - x2) * (v1 - v2) - (x1 - x2) * (v0 - v2)) / det;
+    const b = ((y0 - y2) * (v1 - v2) - (y1 - y2) * (v0 - v2)) / det;
+    const c = ((u0 - u2) * (x1 - x2) - (u1 - u2) * (x0 - x2)) / det;
+    const d = ((u0 - u2) * (y1 - y2) - (u1 - u2) * (y0 - y2)) / det;
+    const e = x0 - a * u0 - c * v0;
+    const f = y0 - b * u0 - d * v0;
+
+    // 3. Apply exact mathematical transform (multiplies current transform)
+    ctx.transform(a, b, c, d, e, f);
+    ctx.drawImage(img, 0, 0);
+    ctx.restore();
+}
+
+/**
+ * corners: [TL, TR, BL, BR] each {x, y} in destination world coords
+ * Renders src canvas warped into the quadrilateral using a Grid Mesh.
+ */
+function renderPerspectiveWarpPreview(destCtx, srcCanvas, corners) {
+    const [tl, tr, bl, br] = corners;
+    const srcW = srcCanvas.width, srcH = srcCanvas.height;
+    if (srcW < 1 || srcH < 1) return;
+
+    // 10x10 Grid for high quality deformation
+    const cols = 10;
+    const rows = 10;
+    
+    // Bilinear interpolation to find coordinate inside the arbitrary quad
+    const getPos = (u, v) => {
+        const topX = tl.x + (tr.x - tl.x) * u;
+        const topY = tl.y + (tr.y - tl.y) * u;
+        const botX = bl.x + (br.x - bl.x) * u;
+        const botY = bl.y + (br.y - bl.y) * u;
+        return {
+            x: topX + (botX - topX) * v,
+            y: topY + (botY - topY) * v
+        };
+    };
+
+    // Draw mesh triangles
+    for (let j = 0; j < rows; j++) {
+        for (let i = 0; i < cols; i++) {
+            // UV coords in [0, 1]
+            const u0 = i / cols, v0 = j / rows;
+            const u1 = (i + 1) / cols, v1 = j / rows;
+            const u2 = i / cols, v2 = (j + 1) / rows;
+            const u3 = (i + 1) / cols, v3 = (j + 1) / rows;
+
+            // Target coordinates
+            const p0 = getPos(u0, v0); // TL
+            const p1 = getPos(u1, v1); // TR
+            const p2 = getPos(u2, v2); // BL
+            const p3 = getPos(u3, v3); // BR
+
+            // Source coordinates in pixels
+            const srcU0 = u0 * srcW, srcV0 = v0 * srcH;
+            const srcU1 = u1 * srcW, srcV1 = v1 * srcH;
+            const srcU2 = u2 * srcW, srcV2 = v2 * srcH;
+            const srcU3 = u3 * srcW, srcV3 = v3 * srcH;
+
+            // Triangle 1: TL -> TR -> BL
+            drawTexturedTriangle(
+                destCtx, srcCanvas,
+                srcU0, srcV0, srcU1, srcV1, srcU2, srcV2,
+                p0.x, p0.y, p1.x, p1.y, p2.x, p2.y
+            );
+
+            // Triangle 2: BR -> BL -> TR
+            drawTexturedTriangle(
+                destCtx, srcCanvas,
+                srcU3, srcV3, srcU2, srcV2, srcU1, srcV1,
+                p3.x, p3.y, p2.x, p2.y, p1.x, p1.y
+            );
+        }
+    }
+}
+
+/**
+ * Applies perspective warp permanently onto target layer context(s).
+ * corners: [TL, TR, BL, BR] world coords.
+ */
+function applyPerspectiveWarpToLayer(targetCtx, srcCanvas, corners) {
+    const tmp = document.createElement('canvas');
+    tmp.width = paperWidth; tmp.height = paperHeight;
+    const tctx = tmp.getContext('2d');
+    renderPerspectiveWarpPreview(tctx, srcCanvas, corners);
+    targetCtx.drawImage(tmp, 0, 0);
+}
+
 function commitModifySelection() {
     if (!modSelInitialized || !modSelBounds) return;
+
+    // ── Perspective warp commit ──
+    if (modSelPerspectiveMode && perspCorners) {
+        if (!isImportingNewImage && modSelLayersData.length > 0) {
+            modSelLayersData.forEach(item => {
+                item.layer.ctx.save();
+                applyPerspectiveWarpToLayer(item.layer.ctx, item.canvas, perspCorners);
+                item.layer.ctx.restore();
+            });
+        } else if (isImportingNewImage) {
+            if (pasteInNewLayer) {
+                const lCanvas = document.createElement('canvas'); lCanvas.width = paperWidth; lCanvas.height = paperHeight;
+                const lCtx = lCanvas.getContext('2d', { willReadFrequently: true });
+                applyPerspectiveWarpToLayer(lCtx, modSelCanvas, perspCorners);
+                const newLayer = { id: Date.now(), name: 'Imagen Importada', canvas: lCanvas, ctx: lCtx, visible: true, opacity: 1.0, thumbData: '', alphaLocked: false, clippingMask: false, blendMode: 'source-over' };
+                layers.splice(selectedLayerIndex + 1, 0, newLayer); selectedLayerIndex++;
+            } else {
+                const target = layers[selectedLayerIndex].ctx;
+                target.save();
+                if (layers[selectedLayerIndex].alphaLocked) target.globalCompositeOperation = 'source-atop';
+                applyPerspectiveWarpToLayer(target, modSelCanvas, perspCorners);
+                target.restore();
+            }
+            isImportingNewImage = false;
+        }
+        // Reset perspective state
+        modSelPerspectiveMode = false; perspCorners = null;
+        if (perspBtn) { perspBtn.style.background = 'rgba(30,30,40,0.9)'; perspBtn.style.boxShadow = ''; }
+        modSelInitialized = false; modSelCanvas = null; modSelBounds = null; modSelOrigBounds = null;
+        modSelRotation = 0; modSelFlipX = 1; modSelFlipY = 1; modSelLayersData = [];
+        if (flipControls) flipControls.classList.add('hidden');
+        updateThumbnails(); updateLayersUI(); pushHistory();
+        return;
+    }
 
     if (isImportingNewImage) {
         if (pasteInNewLayer) {
@@ -2208,9 +2448,11 @@ function handleIncomingFile(file) {
                 // If we are at startup or have no layers, start app with this image
                 startApp(img.width, img.height, img);
                 resetImportButton();
+                if (layerImportState === 1) resetLayerImportButton();
             } else {
                 // App already running, import as new layer
                 importAsNewLayer(img);
+                if (layerImportState === 1) resetLayerImportButton();
             }
         };
         img.src = ev.target.result;
@@ -2400,11 +2642,22 @@ async function pasteFromClipboard() {
 const HANDLE_R = 10; // visual radius in world px
 function getModifyHandle(wx, wy) {
     if (!modSelBounds) return null;
+    const hitR = 15 / viewScale;
+
+    // ── Perspective mode: only 4 corner handles + interior move ──
+    if (modSelPerspectiveMode && perspCorners) {
+        for (let ci = 0; ci < 4; ci++) {
+            if (Math.hypot(wx - perspCorners[ci].x, wy - perspCorners[ci].y) <= hitR) return `pc${ci}`;
+        }
+        // Check if inside perspective quad (simple bounding box of corners)
+        const xs = perspCorners.map(c => c.x), ys = perspCorners.map(c => c.y);
+        if (wx >= Math.min(...xs) && wx <= Math.max(...xs) && wy >= Math.min(...ys) && wy <= Math.max(...ys)) return 'move';
+        return null;
+    }
+
     const b = modSelBounds;
     const cx = b.x + b.w / 2;
     const cy = b.y + b.h / 2;
-    // Hit radius: 15 screen pixels converted to world pixels for easy clicking
-    const hitR = 15 / viewScale;
 
     // 1. Check handles
     const handlePositions = {
@@ -2432,7 +2685,7 @@ function getModifyHandle(wx, wy) {
     const ryL = dxL * Math.sin(modSelRotation) + dyL * Math.cos(modSelRotation);
     if (Math.hypot(wx - (cx + rxL), wy - (cy + ryL)) <= hitR * 1.5) return 'rot';
 
-    // 3. Check if inside bounds (unrotated bounds check is tricky, but let's do a simple inverse transform check)
+    // 3. Check if inside bounds
     const dx = wx - cx, dy = wy - cy;
     const invCos = Math.cos(-modSelRotation), invSin = Math.sin(-modSelRotation);
     const localX = dx * invCos - dy * invSin + cx;
@@ -2892,6 +3145,8 @@ function updateLayersUI() {
             const thumbImg = document.createElement('img');
             thumbImg.src = l.thumbData;
             thumbImg.style.cssText = 'width:100%;height:100%;object-fit:cover;display:block;';
+            thumbImg.draggable = false; // prevent browser's native image drag
+            thumbImg.ondragstart = () => false;
             thumb.appendChild(thumbImg);
         }
         mainInfo.appendChild(thumb);
@@ -2971,6 +3226,56 @@ function updateLayersUI() {
                 requestRender();
             }
         };
+
+        // ── Drag-and-drop reordering ──
+        li.draggable = true;
+        li.addEventListener('dragstart', (e) => {
+            isDraggingLayer = true;
+            e.dataTransfer.effectAllowed = 'move';
+            e.dataTransfer.setData('text/plain', i);
+            setTimeout(() => li.classList.add('dragging'), 0);
+        });
+        li.addEventListener('dragend', () => {
+            isDraggingLayer = false;
+            li.classList.remove('dragging');
+            document.querySelectorAll('.layer-item.drag-over').forEach(el => el.classList.remove('drag-over'));
+        });
+        li.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            e.dataTransfer.dropEffect = 'move';
+            document.querySelectorAll('.layer-item.drag-over').forEach(el => el.classList.remove('drag-over'));
+            li.classList.add('drag-over');
+        });
+        li.addEventListener('dragleave', () => {
+            li.classList.remove('drag-over');
+        });
+        li.addEventListener('drop', (e) => {
+            e.preventDefault();
+            li.classList.remove('drag-over');
+            const fromIndex = parseInt(e.dataTransfer.getData('text/plain'));
+            const toIndex = parseInt(li.dataset.index);
+            if (fromIndex === toIndex) return;
+
+            // Move layer in the array
+            const [moved] = layers.splice(fromIndex, 1);
+            layers.splice(toIndex, 0, moved);
+
+            // Keep selectedLayerIndex pointing to the same layer
+            if (selectedLayerIndex === fromIndex) {
+                selectedLayerIndex = toIndex;
+            } else if (fromIndex < toIndex) {
+                if (selectedLayerIndex > fromIndex && selectedLayerIndex <= toIndex) selectedLayerIndex--;
+            } else {
+                if (selectedLayerIndex >= toIndex && selectedLayerIndex < fromIndex) selectedLayerIndex++;
+            }
+
+            layersCacheDirty = true;
+            updateThumbnails();
+            updateLayersUI();
+            pushHistory();
+            requestRender();
+        });
+
         layersList.appendChild(li);
     }
 }
@@ -3118,7 +3423,17 @@ function handlePointerDown(e) {
         if (!modSelInitialized && hasSelection) initModifySelection();
         if (modSelInitialized) {
             const handle = getModifyHandle(world.x, world.y);
-            if (handle) { modSelHandle = handle; modSelDragStart = { wx: world.x, wy: world.y }; modSelOrigBounds = { ...modSelBounds }; modSelActive = true; }
+            if (handle) {
+                modSelHandle = handle;
+                modSelDragStart = { wx: world.x, wy: world.y };
+                modSelOrigBounds = { ...modSelBounds };
+                modSelActive = true;
+                // Snapshot perspective corners for drag-delta computation
+                if (modSelPerspectiveMode && perspCorners) {
+                    perspDragStart = { wx: world.x, wy: world.y };
+                    perspCornersAtDragStart = perspCorners.map(c => ({ ...c }));
+                }
+            }
         }
     }
     else if (currentTool === 'pincel') {
@@ -3238,8 +3553,28 @@ function handlePointerMove(e) {
         else lassoSelPath = squarePath(lassoSelStartX, lassoSelStartY, world.x, world.y);
     }
     else if (currentTool === 'modify-sel' && modSelActive && modSelHandle) {
-        const dx = world.x - modSelDragStart.wx; const dy = world.y - modSelDragStart.wy;
-        modSelBounds = applyModifyDrag(dx, dy, modSelHandle, modSelOrigBounds, e.shiftKey, world.x, world.y);
+        if (modSelPerspectiveMode && perspCorners && modSelHandle.startsWith('pc')) {
+            // Move a single perspective corner
+            const ci = parseInt(modSelHandle[2]);
+            const dx = world.x - modSelDragStart.wx;
+            const dy = world.y - modSelDragStart.wy;
+            perspCorners[ci].x = perspCornersAtDragStart[ci].x + dx;
+            perspCorners[ci].y = perspCornersAtDragStart[ci].y + dy;
+        } else if (modSelPerspectiveMode && perspCorners && modSelHandle === 'move') {
+            // Move all corners together
+            const dx = world.x - modSelDragStart.wx;
+            const dy = world.y - modSelDragStart.wy;
+            for (let ci = 0; ci < 4; ci++) {
+                perspCorners[ci].x = perspCornersAtDragStart[ci].x + dx;
+                perspCorners[ci].y = perspCornersAtDragStart[ci].y + dy;
+            }
+            // Keep modSelBounds centroid in sync for flip buttons positioning
+            const mxs = perspCorners.map(c => c.x), mys = perspCorners.map(c => c.y);
+            modSelBounds = { x: Math.min(...mxs), y: Math.min(...mys), w: Math.max(...mxs) - Math.min(...mxs), h: Math.max(...mys) - Math.min(...mys) };
+        } else {
+            const dx = world.x - modSelDragStart.wx; const dy = world.y - modSelDragStart.wy;
+            modSelBounds = applyModifyDrag(dx, dy, modSelHandle, modSelOrigBounds, e.shiftKey, world.x, world.y);
+        }
     }
     else if (currentTool === 'eyedropper') {
         updateEyedropperPreview(e.offsetX, e.offsetY, world.x, world.y);
@@ -3321,12 +3656,7 @@ function handlePointerUp(e) {
         if (stabEnabled > 0 && !currentBrush.isLasso && !currentBrush.isShape && !currentBrush.useCompositing) {
             while (stabPoints.length > 0) {
                 const p = stabPoints.shift();
-                if (stabOutX !== null) {
-                    drawStabLineTo(stabOutX, stabOutY, stabOutP, p.x, p.y, p.p);
-                } else {
-                    drawPoint(p.x, p.y, p.p);
-                }
-                stabOutX = p.x; stabOutY = p.y; stabOutP = p.p;
+                drawPoint(p.x, p.y, p.p);
             }
             stabPoints = [];
         }
@@ -3972,72 +4302,82 @@ function render() {
 
     // ── Draw floating modify preview ──
     if (currentTool === 'modify-sel' && modSelInitialized && modSelCanvas && modSelBounds) {
-        const b = modSelBounds;
         ctx.save();
         ctx.beginPath();
         ctx.rect(0, 0, paperWidth, paperHeight);
         ctx.clip();
-
         ctx.imageSmoothingEnabled = true;
         ctx.imageSmoothingQuality = 'high';
 
-        // Apply visual transformation
-        const cx = b.x + b.w / 2;
-        const cy = b.y + b.h / 2;
-        ctx.translate(cx, cy);
-        ctx.rotate(modSelRotation);
-        ctx.scale(modSelFlipX, modSelFlipY);
-        ctx.translate(-cx, -cy);
+        if (modSelPerspectiveMode && perspCorners) {
+            // ── Perspective warp preview using scanline rendering ──
+            renderPerspectiveWarpPreview(ctx, modSelCanvas, perspCorners);
 
-        ctx.drawImage(modSelCanvas, b.x, b.y, b.w, b.h);
+            // Draw the quadrilateral outline
+            ctx.restore();
+            ctx.save();
+            ctx.strokeStyle = '#ff00ff'; ctx.lineWidth = 2 / viewScale; ctx.setLineDash([]);
+            ctx.beginPath();
+            ctx.moveTo(perspCorners[0].x, perspCorners[0].y); // TL
+            ctx.lineTo(perspCorners[1].x, perspCorners[1].y); // TR
+            ctx.lineTo(perspCorners[3].x, perspCorners[3].y); // BR
+            ctx.lineTo(perspCorners[2].x, perspCorners[2].y); // BL
+            ctx.closePath();
+            ctx.stroke();
 
-        // Bounding box (also transformed)
-        ctx.strokeStyle = '#ff00ff'; ctx.lineWidth = 2 / viewScale; ctx.setLineDash([]);
-        ctx.strokeRect(b.x, b.y, b.w, b.h);
-        ctx.restore();
+            // Draw 4 corner handles
+            const hr2 = HANDLE_R / viewScale;
+            const cornerColors = ['#ff00ff', '#ff00ff', '#ff00ff', '#ff00ff'];
+            perspCorners.forEach((c, ci) => {
+                ctx.fillStyle = 'white'; ctx.beginPath(); ctx.arc(c.x, c.y, hr2, 0, Math.PI * 2); ctx.fill();
+                ctx.strokeStyle = cornerColors[ci]; ctx.lineWidth = 2.5 / viewScale; ctx.stroke();
+            });
+            ctx.restore();
+        } else {
+            // ── Normal scale/rotate preview ──
+            const b = modSelBounds;
+            const cx = b.x + b.w / 2;
+            const cy = b.y + b.h / 2;
+            ctx.translate(cx, cy);
+            ctx.rotate(modSelRotation);
+            ctx.scale(modSelFlipX, modSelFlipY);
+            ctx.translate(-cx, -cy);
+            ctx.drawImage(modSelCanvas, b.x, b.y, b.w, b.h);
+            ctx.strokeStyle = '#ff00ff'; ctx.lineWidth = 2 / viewScale; ctx.setLineDash([]);
+            ctx.strokeRect(b.x, b.y, b.w, b.h);
+            ctx.restore();
 
-        // ── Draw handles & rotation lever ──
-        ctx.save();
-        const hr = HANDLE_R / viewScale;
-
-        // Draw rotation lever (outside primary transform to keep it vertical relative to selection)
-        const rotDist = 40 / viewScale;
-        const topCenterX = b.x + b.w / 2;
-        const topCenterY = b.y;
-
-        // Rotate the handle positions logic
-        const drawH = (hx, hy) => {
-            const dx = hx - cx, dy = hy - cy;
-            const rx = dx * Math.cos(modSelRotation) - dy * Math.sin(modSelRotation);
-            const ry = dx * Math.sin(modSelRotation) + dy * Math.cos(modSelRotation);
-            ctx.fillStyle = 'white'; ctx.beginPath(); ctx.arc(cx + rx, cy + ry, hr, 0, Math.PI * 2); ctx.fill();
-            ctx.strokeStyle = '#ff00ff'; ctx.lineWidth = 2 / viewScale; ctx.setLineDash([]); ctx.stroke();
-        };
-
-        // Lever line
-        const leverX = topCenterX, leverY = topCenterY - rotDist;
-        const dxL = leverX - cx, dyL = leverY - cy;
-        const rxL = dxL * Math.cos(modSelRotation) - dyL * Math.sin(modSelRotation);
-        const ryL = dxL * Math.sin(modSelRotation) + dyL * Math.cos(modSelRotation);
-
-        const dxTC = topCenterX - cx, dyTC = topCenterY - cy;
-        const rxTC = dxTC * Math.cos(modSelRotation) - dyTC * Math.sin(modSelRotation);
-        const ryTC = dxTC * Math.sin(modSelRotation) + dyTC * Math.cos(modSelRotation);
-
-        ctx.strokeStyle = '#ff00ff'; ctx.lineWidth = 2 / viewScale;
-        ctx.beginPath(); ctx.moveTo(cx + rxTC, cy + ryTC); ctx.lineTo(cx + rxL, cy + ryL); ctx.stroke();
-
-        // Lever handle
-        ctx.fillStyle = '#ff00ff'; ctx.beginPath(); ctx.arc(cx + rxL, cy + ryL, hr * 1.2, 0, Math.PI * 2); ctx.fill();
-        ctx.strokeStyle = 'white'; ctx.stroke();
-
-        const handlePositions = [
-            [b.x, b.y], [b.x + b.w / 2, b.y], [b.x + b.w, b.y],
-            [b.x, b.y + b.h / 2], [b.x + b.w, b.y + b.h / 2],
-            [b.x, b.y + b.h], [b.x + b.w / 2, b.y + b.h], [b.x + b.w, b.y + b.h],
-        ];
-        handlePositions.forEach(([hx, hy]) => drawH(hx, hy));
-        ctx.restore();
+            // ── Draw handles & rotation lever ──
+            ctx.save();
+            const hr = HANDLE_R / viewScale;
+            const rotDist = 40 / viewScale;
+            const topCenterX = b.x + b.w / 2;
+            const topCenterY = b.y;
+            const drawH = (hx, hy) => {
+                const dx = hx - cx, dy = hy - cy;
+                const rx = dx * Math.cos(modSelRotation) - dy * Math.sin(modSelRotation);
+                const ry = dx * Math.sin(modSelRotation) + dy * Math.cos(modSelRotation);
+                ctx.fillStyle = 'white'; ctx.beginPath(); ctx.arc(cx + rx, cy + ry, hr, 0, Math.PI * 2); ctx.fill();
+                ctx.strokeStyle = '#ff00ff'; ctx.lineWidth = 2 / viewScale; ctx.setLineDash([]); ctx.stroke();
+            };
+            const dxL = topCenterX - rotDist * 0 - cx, dyL = topCenterY - rotDist - cy;
+            const rxL = dxL * Math.cos(modSelRotation) - dyL * Math.sin(modSelRotation);
+            const ryL = dxL * Math.sin(modSelRotation) + dyL * Math.cos(modSelRotation);
+            const dxTC = topCenterX - cx, dyTC = topCenterY - cy;
+            const rxTC = dxTC * Math.cos(modSelRotation) - dyTC * Math.sin(modSelRotation);
+            const ryTC = dxTC * Math.sin(modSelRotation) + dyTC * Math.cos(modSelRotation);
+            ctx.strokeStyle = '#ff00ff'; ctx.lineWidth = 2 / viewScale;
+            ctx.beginPath(); ctx.moveTo(cx + rxTC, cy + ryTC); ctx.lineTo(cx + rxL, cy + ryL); ctx.stroke();
+            ctx.fillStyle = '#ff00ff'; ctx.beginPath(); ctx.arc(cx + rxL, cy + ryL, hr * 1.2, 0, Math.PI * 2); ctx.fill();
+            ctx.strokeStyle = 'white'; ctx.stroke();
+            const handlePositions = [
+                [b.x, b.y], [b.x + b.w / 2, b.y], [b.x + b.w, b.y],
+                [b.x, b.y + b.h / 2], [b.x + b.w, b.y + b.h / 2],
+                [b.x, b.y + b.h], [b.x + b.w / 2, b.y + b.h], [b.x + b.w, b.y + b.h],
+            ];
+            handlePositions.forEach(([hx, hy]) => drawH(hx, hy));
+            ctx.restore();
+        }
 
         // Update flip buttons position
         updateFlipButtonsPosition();
@@ -4364,7 +4704,7 @@ function handleGlobalShortcuts(e) {
 
     if (e.ctrlKey && key === 'c') { e.preventDefault(); copyToClipboard(); return; }
     if (e.ctrlKey && key === 'v') {
-        if (startupImportState === 1) return; // Let the window 'paste' listener handle it
+        if (startupImportState === 1 || layerImportState === 1) return; // Let the window 'paste' listener handle it
         e.preventDefault(); pasteFromClipboard(); return;
     }
     if (e.ctrlKey && (key === 'z')) { e.preventDefault(); undo(); return; }
