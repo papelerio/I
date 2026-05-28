@@ -22,7 +22,7 @@ const activeToolIndicator = document.getElementById('active-tool-indicator');
 const filtersMenu = document.getElementById('filters-menu');
 const filterModal = document.getElementById('filter-modal');
 const resetRotationBtn = document.getElementById('reset-rotation-btn');
-const bucketModeBtn = document.getElementById('bucket-mode-btn');
+
 const blurSettingsContainer = document.getElementById('blur-settings-container');
 const blurSlider = document.getElementById('brush-blur');
 const blurValueLabel = document.getElementById('blur-value');
@@ -202,7 +202,11 @@ let isTemporaryPan = false;
 
 // Lasso/Bucket State
 let lassoPath = [];
-let bucketMode = 'capa';
+let bucketMode = 'capa';        // 'capa' | 'lienzo' — which source to sample from
+let bucketTolerance = 32;       // 0–255 color match tolerance
+let bucketContiguous = true;    // flood-fill (true) vs global pixel replace (false)
+let bucketFillMode = 'solid';   // 'solid' | 'erase'
+let bucketPanel = null;         // floating settings panel
 const customCursorImg = new Image();
 customCursorImg.src = 'CURSOR.png';
 let screenCursorX = 0;
@@ -275,10 +279,10 @@ let fitScreenBtn = null;
 let eyedropperFadeTimeout = null;
 let zoomPivotWorld = null;
 let zoomPivotScreen = null;
-let pushGridU = null;
-let pushGridV = null;
 let pushSnapshot = null;
-let pushBounds = null;
+let pushSnapshotPixels = null;
+let pushDisplacementX = null;
+let pushDisplacementY = null;
 let blurBuffer = null;
 let smudgeBuffer = null;
 let brushMaskCanvas = document.createElement('canvas');
@@ -453,12 +457,14 @@ function restoreHistoryState(snapshot) {
 
 function undo() {
     if (historyIndex <= 0) return; // nothing more to undo
+    endPushSession();
     historyIndex--;
     restoreHistoryState(historyStack[historyIndex]);
 }
 
 function redo() {
     if (historyIndex >= historyStack.length - 1) return; // nothing to redo
+    endPushSession();
     historyIndex++;
     restoreHistoryState(historyStack[historyIndex]);
 }
@@ -1854,12 +1860,12 @@ function updateShapeFromCenterUI() {
 
 function showSelectionButtons(tool) {
     // Hide all extras first
-    [lassoSelBtn, lassoDesBtn, modifySelBtn, clearSelBtn, bucketModeBtn, shapeFillBtn, shapeFromCenterBtn, fitScreenBtn].forEach(b => { if (b) b.classList.add('hidden'); });
+    [lassoSelBtn, lassoDesBtn, modifySelBtn, clearSelBtn, shapeFillBtn, shapeFromCenterBtn, fitScreenBtn].forEach(b => { if (b) b.classList.add('hidden'); });
 
     if (tool === 'lazo-sel') { if (lassoSelBtn) lassoSelBtn.classList.remove('hidden'); if (hasSelection && clearSelBtn) clearSelBtn.classList.remove('hidden'); }
     if (tool === 'lazo-des') { if (lassoDesBtn) lassoDesBtn.classList.remove('hidden'); if (hasSelection && clearSelBtn) clearSelBtn.classList.remove('hidden'); }
     if (tool === 'modify-sel') { if (modifySelBtn) modifySelBtn.classList.remove('hidden'); if (clearSelBtn) clearSelBtn.classList.remove('hidden'); }
-    if (tool === 'bucket') { if (bucketModeBtn) bucketModeBtn.classList.remove('hidden'); }
+    if (tool === 'bucket') { /* bucket panel handled by showBucketPanel() */ }
     // Show fill toggle for rect & ellipse shapes
     if (tool === 'pincel' && currentBrush.isShape && currentBrush.shapeType !== 'line') {
         if (shapeFillBtn) shapeFillBtn.classList.remove('hidden');
@@ -1882,6 +1888,17 @@ function ensureSelectionCanvas() {
     }
 }
 
+// Helper to remove antialiasing from selection mask so scaling doesn't stretch translucent boundaries
+function makeSelectionCrisp() {
+    if (!selectionCanvas || !selCtx) return;
+    const imgData = selCtx.getImageData(0, 0, paperWidth, paperHeight);
+    const d = imgData.data;
+    for (let i = 3; i < d.length; i += 4) {
+        d[i] = d[i] > 127 ? 255 : 0;
+    }
+    selCtx.putImageData(imgData, 0, 0);
+}
+
 // Add a closed polygon path to the selection mask
 function addPathToSelection(path) {
     if (path.length < 3) return;
@@ -1895,6 +1912,9 @@ function addPathToSelection(path) {
     selCtx.closePath();
     selCtx.fill();
     selCtx.restore();
+    
+    makeSelectionCrisp();
+    
     hasSelection = true;
     updateSelectionOutline();
 }
@@ -1911,6 +1931,9 @@ function subtractPathFromSelection(path) {
     selCtx.closePath();
     selCtx.fill();
     selCtx.restore();
+    
+    makeSelectionCrisp();
+    
     // check if still anything selected
     const d = selCtx.getImageData(0, 0, paperWidth, paperHeight).data;
     hasSelection = d.some((v, i) => i % 4 === 3 && v > 0);
@@ -2124,13 +2147,15 @@ function drawTexturedTriangle(ctx, img, u0, v0, u1, v1, u2, v2, x0, y0, x1, y1, 
     ctx.save();
     
     // 1. Create expanded clipping path to avoid seams (líneas entrecortadas)
+    // The padding must scale inversely with viewScale so it always covers ~2 screen pixels
     const cx = (x0 + x1 + x2) / 3;
     const cy = (y0 + y1 + y2) / 3;
-    const pad = 0.8; // Expand by 0.8px outwards
+    const pad = 2.5 / (typeof viewScale !== 'undefined' ? viewScale : 1); 
     
     const ex = (x, y) => {
         const dx = x - cx, dy = y - cy;
         const dist = Math.hypot(dx, dy) || 1;
+        // Push vertices away from centroid to slightly overlap adjacent triangles
         return [x + (dx / dist) * pad, y + (dy / dist) * pad];
     };
     
@@ -2462,6 +2487,7 @@ function handleIncomingFile(file) {
 
 function importAsNewLayer(img) {
     if (modSelInitialized) commitModifySelection();
+    endPushSession();
     clearSelection();
 
     // Position at the center of the current screen view
@@ -2984,6 +3010,7 @@ function checkAndShrinkPalette() {
 //  LAYERS
 // ─────────────────────────────────────────────────────────────
 function addLayer(name, fromCanvas = false) {
+    endPushSession();
     const lCanvas = document.createElement('canvas'); lCanvas.width = paperWidth; lCanvas.height = paperHeight;
     const lCtx = lCanvas.getContext('2d', { willReadFrequently: true });
     if (fromCanvas && layers.length > 0) {
@@ -3027,6 +3054,7 @@ function moveLayerContent() {
 
 function duplicateSelectedLayer() {
     if (layers.length === 0 || selectedLayerIndex < 0 || selectedLayerIndex >= layers.length) return;
+    endPushSession();
     const current = layers[selectedLayerIndex];
     const lCanvas = document.createElement('canvas'); lCanvas.width = paperWidth; lCanvas.height = paperHeight;
     const lCtx = lCanvas.getContext('2d', { willReadFrequently: true });
@@ -3061,6 +3089,7 @@ function toggleBackground() {
 }
 function mergeLayerDown(index) {
     if (index <= 0) return;
+    endPushSession();
     const curr = layers[index];
     const target = layers[index - 1];
 
@@ -3221,6 +3250,7 @@ function updateLayersUI() {
         li.appendChild(controls);
         li.onclick = () => {
             if (selectedLayerIndex !== i) {
+                endPushSession();
                 selectedLayerIndex = i;
                 updateLayersUI();
                 requestRender();
@@ -3294,6 +3324,240 @@ function applyCursor(drawing) {
     } else {
         document.documentElement.style.removeProperty('cursor');
     }
+}
+
+// ─────────────────────────────────────────────────────────────
+//  BUCKET FILL
+// ─────────────────────────────────────────────────────────────
+function executeBucket(worldX, worldY) {
+    const px = Math.floor(worldX);
+    const py = Math.floor(worldY);
+    if (px < 0 || px >= paperWidth || py < 0 || py >= paperHeight) return;
+
+    const l = layers[selectedLayerIndex];
+    if (!l) return;
+
+    // --- Build source pixel data (what we sample from) ---
+    let srcData;
+    if (bucketMode === 'lienzo') {
+        // Composite all layers into a temp canvas for sampling
+        const tmpC = document.createElement('canvas'); tmpC.width = paperWidth; tmpC.height = paperHeight;
+        const tmpX = tmpC.getContext('2d');
+        if (!transparentBG) { tmpX.fillStyle = 'white'; tmpX.fillRect(0, 0, paperWidth, paperHeight); }
+        compositeLayers(tmpX);
+        srcData = tmpX.getImageData(0, 0, paperWidth, paperHeight).data;
+    } else {
+        srcData = l.ctx.getImageData(0, 0, paperWidth, paperHeight).data;
+    }
+
+    // --- Target color we click on ---
+    const idx0 = (py * paperWidth + px) * 4;
+    const tR = srcData[idx0];
+    const tG = srcData[idx0 + 1];
+    const tB = srcData[idx0 + 2];
+    const tA = srcData[idx0 + 3];
+
+    // --- Fill color ---
+    let fillR, fillG, fillB, fillA;
+    if (bucketFillMode === 'erase') {
+        fillR = fillG = fillB = fillA = 0;
+    } else {
+        const fc = hexToRgbArray(selectedColor);
+        fillR = fc[0]; fillG = fc[1]; fillB = fc[2]; fillA = Math.round(brushOpacity * 255);
+    }
+
+    // Skip if target === fill (would infinite loop or do nothing)
+    if (bucketFillMode !== 'erase') {
+        const sameColor = (tR === fillR && tG === fillG && tB === fillB && tA === fillA);
+        if (sameColor && tA > 0) return;
+    }
+
+    // --- Color distance helper ---
+    const tol = bucketTolerance;
+    function colorMatch(i) {
+        const dr = srcData[i] - tR;
+        const dg = srcData[i + 1] - tG;
+        const db = srcData[i + 2] - tB;
+        const da = srcData[i + 3] - tA;
+        return (dr * dr + dg * dg + db * db + da * da) <= tol * tol * 4;
+    }
+
+    // --- Prepare destination ImageData (always the active layer) ---
+    const dstImgData = l.ctx.getImageData(0, 0, paperWidth, paperWidth === paperWidth ? paperHeight : paperHeight);
+    const dst = dstImgData.data;
+
+    function applyPixel(i) {
+        if (bucketFillMode === 'erase') {
+            dst[i] = dst[i + 1] = dst[i + 2] = dst[i + 3] = 0;
+        } else {
+            dst[i] = fillR; dst[i + 1] = fillG; dst[i + 2] = fillB; dst[i + 3] = fillA;
+        }
+    }
+
+    const W = paperWidth;
+    const H = paperHeight;
+
+    if (bucketContiguous) {
+        // ── Contiguous flood fill (4-connected stack BFS) ──
+        const visited = new Uint8Array(W * H);
+        const stack = [px + py * W];
+        visited[px + py * W] = 1;
+
+        while (stack.length > 0) {
+            const pos = stack.pop();
+            const x = pos % W;
+            const y = (pos / W) | 0;
+            const i = pos * 4;
+
+            applyPixel(i);
+
+            const neighbors = [
+                x > 0     ? pos - 1 : -1,
+                x < W - 1 ? pos + 1 : -1,
+                y > 0     ? pos - W : -1,
+                y < H - 1 ? pos + W : -1,
+            ];
+            for (const n of neighbors) {
+                if (n >= 0 && !visited[n] && colorMatch(n * 4)) {
+                    visited[n] = 1;
+                    stack.push(n);
+                }
+            }
+        }
+    } else {
+        // ── Global: replace all matching pixels in the layer ──
+        for (let i = 0; i < srcData.length; i += 4) {
+            if (colorMatch(i)) applyPixel(i);
+        }
+    }
+
+    // Apply selection mask if active
+    if (hasSelection && selectionCanvas) {
+        const origLayer = l.ctx.getImageData(0, 0, W, H).data; // snapshot BEFORE write
+        const selData = selCtx.getImageData(0, 0, W, H).data;
+        // Blend fill with original based on selection mask
+        for (let i = 0; i < dst.length; i += 4) {
+            const sa = selData[i + 3];
+            if (sa < 128) {
+                dst[i]     = origLayer[i];
+                dst[i + 1] = origLayer[i + 1];
+                dst[i + 2] = origLayer[i + 2];
+                dst[i + 3] = origLayer[i + 3];
+            }
+        }
+        l.ctx.putImageData(dstImgData, 0, 0);
+    } else {
+        l.ctx.putImageData(dstImgData, 0, 0);
+    }
+
+    updateThumbnails();
+    updateLayersUI();
+    pushHistory();
+    requestRender();
+}
+
+function buildBucketPanel() {
+    if (document.getElementById('bucket-settings-panel')) return;
+    const panel = document.createElement('div');
+    panel.id = 'bucket-settings-panel';
+    panel.className = 'floating-menu hidden';
+    panel.style.cssText = 'position:fixed !important; top:80px; left:auto !important; right:20px; width:260px; z-index:2000; pointer-events:auto;';
+    panel.innerHTML = `
+        <div class="menu-header" style="cursor:default"><label>⚙ Configuración Cubeta</label></div>
+        <div style="padding:14px; display:flex; flex-direction:column; gap:14px;">
+
+            <div>
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+                    <label style="font-size:11px; font-weight:700; color:#888;">TOLERANCIA</label>
+                    <span id="bucket-tol-value" style="font-size:12px; font-weight:700; color:#0066ff;">32</span>
+                </div>
+                <input type="range" id="bucket-tol-slider" min="0" max="255" value="32"
+                    style="width:100%; accent-color:#0066ff;">
+                <div style="display:flex; justify-content:space-between; margin-top:2px;">
+                    <span style="font-size:9px; color:#aaa;">Exacto</span>
+                    <span style="font-size:9px; color:#aaa;">Todo</span>
+                </div>
+            </div>
+
+            <div>
+                <label style="font-size:11px; font-weight:700; color:#888; display:block; margin-bottom:8px;">MODO DE RELLENO</label>
+                <div style="display:flex; gap:6px;">
+                    <button id="bucket-fill-solid" class="bucket-mode-pill active-pill">🎨 Color</button>
+                    <button id="bucket-fill-erase" class="bucket-mode-pill">🧹 Borrar</button>
+                </div>
+            </div>
+
+            <div>
+                <label style="font-size:11px; font-weight:700; color:#888; display:block; margin-bottom:8px;">ÁREA DE RELLENO</label>
+                <div style="display:flex; gap:6px;">
+                    <button id="bucket-area-contig" class="bucket-mode-pill active-pill">⬤ Contiguo</button>
+                    <button id="bucket-area-global" class="bucket-mode-pill">◎ Global</button>
+                </div>
+            </div>
+
+            <div>
+                <label style="font-size:11px; font-weight:700; color:#888; display:block; margin-bottom:8px;">FUENTE DE MUESTRA</label>
+                <div style="display:flex; gap:6px;">
+                    <button id="bucket-src-layer" class="bucket-mode-pill active-pill">Capa activa</button>
+                    <button id="bucket-src-canvas" class="bucket-mode-pill">Lienzo completo</button>
+                </div>
+            </div>
+        </div>`;
+    document.body.appendChild(panel);
+    bucketPanel = panel;
+
+    // Pill helper
+    function setPills(groupIds, activeId) {
+        groupIds.forEach(id => {
+            const btn = document.getElementById(id);
+            if (btn) btn.classList.toggle('active-pill', id === activeId);
+        });
+    }
+
+    // Tolerance
+    const tolSlider = document.getElementById('bucket-tol-slider');
+    const tolVal = document.getElementById('bucket-tol-value');
+    tolSlider.oninput = () => {
+        bucketTolerance = parseInt(tolSlider.value);
+        tolVal.textContent = bucketTolerance;
+    };
+    tolSlider.onpointerup = (e) => e.target.blur();
+
+    // Fill mode
+    document.getElementById('bucket-fill-solid').onclick = () => {
+        bucketFillMode = 'solid';
+        setPills(['bucket-fill-solid', 'bucket-fill-erase'], 'bucket-fill-solid');
+    };
+    document.getElementById('bucket-fill-erase').onclick = () => {
+        bucketFillMode = 'erase';
+        setPills(['bucket-fill-solid', 'bucket-fill-erase'], 'bucket-fill-erase');
+    };
+
+    // Contiguous
+    document.getElementById('bucket-area-contig').onclick = () => {
+        bucketContiguous = true;
+        setPills(['bucket-area-contig', 'bucket-area-global'], 'bucket-area-contig');
+    };
+    document.getElementById('bucket-area-global').onclick = () => {
+        bucketContiguous = false;
+        setPills(['bucket-area-contig', 'bucket-area-global'], 'bucket-area-global');
+    };
+
+    // Source
+    document.getElementById('bucket-src-layer').onclick = () => {
+        bucketMode = 'capa';
+        setPills(['bucket-src-layer', 'bucket-src-canvas'], 'bucket-src-layer');
+    };
+    document.getElementById('bucket-src-canvas').onclick = () => {
+        bucketMode = 'lienzo';
+        setPills(['bucket-src-layer', 'bucket-src-canvas'], 'bucket-src-canvas');
+    };
+}
+
+function showBucketPanel(show) {
+    if (!bucketPanel) buildBucketPanel();
+    if (show) bucketPanel.classList.remove('hidden');
+    else bucketPanel.classList.add('hidden');
 }
 
 function handlePointerDown(e) {
@@ -3385,18 +3649,15 @@ function handlePointerDown(e) {
     else if (currentTool === 'push') {
         isDrawing = true;
         canvas.setPointerCapture(e.pointerId);
-        const radius = baseBrushSize * 25;
-        const margin = radius + 50;
-        const x = Math.max(0, Math.floor(world.x - margin));
-        const y = Math.max(0, Math.floor(world.y - margin));
-        const w = Math.min(paperWidth - x, Math.ceil(margin * 2));
-        const h = Math.min(paperHeight - y, Math.ceil(margin * 2));
-        pushBounds = { x, y, w, h };
-        pushSnapshot = document.createElement('canvas');
-        pushSnapshot.width = w; pushSnapshot.height = h;
-        pushSnapshot.getContext('2d').drawImage(layers[selectedLayerIndex].canvas, -x, -y);
-        pushGridU = new Float32Array(w * h);
-        pushGridV = new Float32Array(w * h);
+        if (!pushSnapshot) {
+            pushSnapshot = document.createElement('canvas');
+            pushSnapshot.width = paperWidth;
+            pushSnapshot.height = paperHeight;
+            pushSnapshot.getContext('2d').drawImage(layers[selectedLayerIndex].canvas, 0, 0);
+            pushSnapshotPixels = pushSnapshot.getContext('2d').getImageData(0, 0, paperWidth, paperHeight).data;
+            pushDisplacementX = new Float32Array(paperWidth * paperHeight);
+            pushDisplacementY = new Float32Array(paperWidth * paperHeight);
+        }
     }
     else if (currentBrush.isBlur) { blurBuffer = null; }
     else if (currentBrush.isGaussBlur) {
@@ -3725,7 +3986,6 @@ function handlePointerUp(e) {
     }
 
     else if (currentTool === 'push') {
-        pushGridU = null; pushGridV = null; pushSnapshot = null; pushBounds = null;
         updateThumbnails(); updateLayersUI();
         pushHistory();
     }
@@ -3931,81 +4191,75 @@ function drawPoint(x, y, pressure) {
 //  PUSH TOOL (high-quality per-pixel displacement)
 // ─────────────────────────────────────────────────────────────
 
-function ensurePushBounds(worldX, worldY) {
-    if (!pushBounds) return;
-    const threshold = baseBrushSize * 12;
-    const { x: bX, y: bY, w, h } = pushBounds;
-    if (worldX >= bX + threshold && worldX <= bX + w - threshold &&
-        worldY >= bY + threshold && worldY <= bY + h - threshold) return;
-
-    const radius = baseBrushSize * 25;
-    const margin = radius + 50;
-    const newX = Math.max(0, Math.floor(worldX - margin));
-    const newY = Math.max(0, Math.floor(worldY - margin));
-    const newW = Math.min(paperWidth - newX, Math.ceil(margin * 2));
-    const newH = Math.min(paperHeight - newY, Math.ceil(margin * 2));
-
-    const newSnapshot = document.createElement('canvas');
-    newSnapshot.width = newW; newSnapshot.height = newH;
-    newSnapshot.getContext('2d').drawImage(layers[selectedLayerIndex].canvas, -newX, -newY);
-
-    pushBounds = { x: newX, y: newY, w: newW, h: newH };
-    pushSnapshot = newSnapshot;
-    pushGridU = new Float32Array(newW * newH);
-    pushGridV = new Float32Array(newW * newH);
+function endPushSession() {
+    pushSnapshot = null;
+    pushSnapshotPixels = null;
+    pushDisplacementX = null;
+    pushDisplacementY = null;
 }
 
 function executePush(worldX, worldY, dx, dy) {
-    if (!pushGridU || !pushSnapshot || !pushBounds) return;
+    if (!pushSnapshot || !pushSnapshotPixels || !pushDisplacementX || !pushDisplacementY) return;
     if (Math.abs(dx) < 0.1 && Math.abs(dy) < 0.1) return;
-
-    ensurePushBounds(worldX, worldY);
-    if (!pushGridU || !pushSnapshot || !pushBounds) return;
 
     const radius = baseBrushSize * 8;
     const strength = brushOpacity * 1.5;
     const l = layers[selectedLayerIndex];
-    const { x: bX, y: bY, w, h } = pushBounds;
+    if (!l) return;
 
-    const sourceData = pushSnapshot.getContext('2d').getImageData(0, 0, w, h);
-    const destData = l.ctx.getImageData(bX, bY, w, h);
-    const src = sourceData.data;
-    const dest = destData.data;
+    const W = paperWidth;
+    const H = paperHeight;
 
     const margin = radius + 2;
-    const iStart = Math.max(0, Math.floor(worldX - bX - margin));
-    const iEnd = Math.min(w, Math.ceil(worldX - bX + margin));
-    const jStart = Math.max(0, Math.floor(worldY - bY - margin));
-    const jEnd = Math.min(h, Math.ceil(worldY - bY + margin));
+    const iStart = Math.max(0, Math.floor(worldX - margin));
+    const iEnd = Math.min(W, Math.ceil(worldX + margin));
+    const jStart = Math.max(0, Math.floor(worldY - margin));
+    const jEnd = Math.min(H, Math.ceil(worldY + margin));
+    const boxW = iEnd - iStart;
+    const boxH = jEnd - jStart;
+    if (boxW <= 0 || boxH <= 0) return;
+
+    const destData = l.ctx.getImageData(iStart, jStart, boxW, boxH);
+    const src = pushSnapshotPixels;
+    const dest = destData.data;
+
+    let selectionPixels = null;
+    if (hasSelection && selectionCanvas) {
+        selectionPixels = selCtx.getImageData(0, 0, W, H).data;
+    }
 
     for (let j = jStart; j < jEnd; j++) {
         for (let i = iStart; i < iEnd; i++) {
-            const worldPX = bX + i;
-            const worldPY = bY + j;
-            const pos = j * w + i;
-
-            const dist = Math.hypot(worldPX - worldX, worldPY - worldY);
-            if (dist < radius) {
-                const weight = Math.pow(1 - dist / radius, 1.5);
-                pushGridU[pos] += dx * weight * strength;
-                pushGridV[pos] += dy * weight * strength;
+            const pos = j * W + i;
+            let selFactor = 1.0;
+            if (hasSelection && selectionPixels) {
+                selFactor = selectionPixels[pos * 4 + 3] / 255;
             }
 
-            const sx = i - pushGridU[pos];
-            const sy = j - pushGridV[pos];
+            const dist = Math.hypot(i - worldX, j - worldY);
+            if (dist < radius) {
+                const weight = Math.pow(1 - dist / radius, 1.5) * selFactor;
+                pushDisplacementX[pos] += dx * weight * strength;
+                pushDisplacementY[pos] += dy * weight * strength;
+            }
 
+            // Source coordinates in the original image
+            const sx = i - pushDisplacementX[pos];
+            const sy = j - pushDisplacementY[pos];
+
+            // Bilinear interpolation
             const x0 = Math.floor(sx), x1 = x0 + 1;
             const y0 = Math.floor(sy), y1 = y0 + 1;
             const fx = sx - x0, fy = sy - y0;
 
             const getP = (px, py) => {
-                if (px < 0 || px >= w || py < 0 || py >= h) return [0, 0, 0, 0];
-                const p = (py * w + px) * 4;
+                if (px < 0 || px >= W || py < 0 || py >= H) return [0, 0, 0, 0];
+                const p = (py * W + px) * 4;
                 return [src[p], src[p + 1], src[p + 2], src[p + 3]];
             };
 
             const p00 = getP(x0, y0), p10 = getP(x1, y0), p01 = getP(x0, y1), p11 = getP(x1, y1);
-            const dPos = pos * 4;
+            const dPos = ((j - jStart) * boxW + (i - iStart)) * 4;
             for (let k = 0; k < 4; k++) {
                 const top = p00[k] + fx * (p10[k] - p00[k]);
                 const bot = p01[k] + fx * (p11[k] - p01[k]);
@@ -4013,7 +4267,7 @@ function executePush(worldX, worldY, dx, dy) {
             }
         }
     }
-    l.ctx.putImageData(destData, bX, bY);
+    l.ctx.putImageData(destData, iStart, jStart);
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -4567,7 +4821,12 @@ function selectTool(id, name) {
         document.querySelectorAll('.chroma-lasso-btn').forEach(b => b.style.boxShadow = '');
     }
     if (currentTool === 'modify-sel' && id !== 'modify-sel' && modSelInitialized) commitModifySelection();
-    if (currentTool === 'push' && id !== 'push' && pushGridU) { pushGridU = null; pushGridV = null; pushSnapshot = null; pushBounds = null; pushHistory(); }
+    if (currentTool === 'push') {
+        const isTargetPush = (id === 'push' || (id === 'pincel' && name === 'Empujar'));
+        if (!isTargetPush) {
+            endPushSession();
+        }
+    }
 
     if (isResizingCanvas) {
         isResizingCanvas = false;
@@ -4598,6 +4857,8 @@ function selectTool(id, name) {
         if (activeToolIndicator) activeToolIndicator.textContent = name;
     }
     showSelectionButtons(id);
+    // Show / hide bucket settings panel
+    showBucketPanel(id === 'bucket');
 
     // Load this brush's remembered size / opacity / blur into the UI
     syncBrushUI();

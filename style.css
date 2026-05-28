@@ -1655,3 +1655,31 @@ body:not(.theme-classic) .tool-btn img {
     height: 20px;
     object-fit: contain;
 }
+
+/* ─── Bucket Settings Panel ─── */
+.bucket-mode-pill {
+    flex: 1;
+    padding: 7px 8px;
+    font-size: 11px;
+    font-weight: 700;
+    font-family: var(--font-main);
+    background: var(--bg-item);
+    color: var(--text-dim);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.18s;
+    text-align: center;
+}
+
+.bucket-mode-pill:hover {
+    background: var(--bg-item-hover);
+    color: var(--text-main);
+}
+
+.bucket-mode-pill.active-pill {
+    background: #0066ff;
+    color: #ffffff;
+    border-color: #0066ff;
+    box-shadow: 0 2px 8px rgba(0, 102, 255, 0.4);
+}
