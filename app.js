@@ -153,7 +153,8 @@ function updateLayersCache(limit) {
 
 
 // UI Globals
-const checkerPatternCanvas = document.createElement('canvas'); let checkerPattern = null;
+const checkerPatternLightCanvas = document.createElement('canvas'); let checkerPatternLight = null;
+const checkerPatternDarkCanvas = document.createElement('canvas'); let checkerPatternDark = null;
 let selectedColor = '#000000';
 
 
@@ -302,7 +303,7 @@ let isAddingToPalette = false;
 let paletteColors = []; let paletteRows = 5; const paletteCols = 5;
 
 // Layer System
-let layers = []; let selectedLayerIndex = 0; let transparentBG = false;
+let layers = []; let selectedLayerIndex = 0; let bgMode = 1; let solidBgColor = '#ffffff';
 
 // ─────────────────────────────────────────────────────────────
 //  HISTORY (UNDO / REDO)
@@ -710,7 +711,25 @@ function init() {
         }
     };
     document.getElementById('insert-layer-btn').onclick = () => addLayer("Capa desde lienzo", true);
-    document.getElementById('toggle-bg-btn').onclick = toggleBackground;
+    
+    const toggleBgBtn = document.getElementById('toggle-bg-btn');
+    toggleBgBtn.onclick = toggleBackground;
+    toggleBgBtn.oncontextmenu = (e) => {
+        e.preventDefault();
+        const input = document.createElement('input');
+        input.type = 'color';
+        input.value = solidBgColor;
+        input.oninput = (ev) => {
+            solidBgColor = ev.target.value;
+            if (bgMode !== 1) {
+                bgMode = 1;
+                updateBgUI();
+            }
+            requestRender();
+        };
+        input.click();
+    };
+
     document.getElementById('move-layer-btn').onclick = () => { toggleMenu(null); moveLayerContent(); };
 
     [mainShortcutInput, brushShortcutInput, layersShortcutInput, colorsShortcutInput, configShortcutInput].forEach(inp => {
@@ -718,6 +737,7 @@ function init() {
     });
 
     mainColorPicker.oninput = (e) => { selectedColor = e.target.value; updateTintedTexture(); };
+    mainColorPicker.onchange = (e) => { e.target.blur(); };
 
     addToPaletteBtn.onclick = () => { isAddingToPalette = true; addToPaletteBtn.classList.add('active-waiting'); };
 
@@ -814,6 +834,7 @@ let chromaFuzziness = 20;
 let chromaMaskCanvas = null;
 let chromaMaskCtx = null;
 let chromaDebugBG = null; // null, '#ff0000', '#00ff00', '#0000ff'
+let outlineCache = { params: {}, solid: null, outerDist: null, innerDist: null };
 let chromaLassoMode = 'none'; // 'none', 'add' (regenerador), 'sub' (eliminador), 'clear' (nulo), 'pick'
 
 function selectChromaLasso(mode) {
@@ -831,7 +852,8 @@ function selectChromaLasso(mode) {
 }
 
 function openFilterModal(type) {
-    filterPrevTool = currentTool;
+    // Guardar la herramienta anterior, pero nunca guardar 'none' para no bloquear los filtros
+    filterPrevTool = (currentTool && currentTool !== 'none') ? currentTool : filterPrevTool;
     currentTool = 'none';
     activeFilterType = type;
     const l = layers[selectedLayerIndex];
@@ -845,6 +867,7 @@ function openFilterModal(type) {
     if (type === 'blackwhite') {
         title.textContent = 'Blanco y Negro (Lineart)';
         desc.textContent = 'Extrae el lineart basándote en la luminosidad.';
+        blackWhiteBgMode = 'transparent'; // Resetear siempre al abrir el modal
         addFilterToggle('Fondo', ['transparent', 'white'], blackWhiteBgMode, (v) => { blackWhiteBgMode = v; applyFilters(); });
         addFilterSlider('Punto Negro', 0, 255, 20, (v) => applyFilters());
         addFilterSlider('Punto Blanco', 0, 255, 230, (v) => applyFilters());
@@ -883,6 +906,35 @@ function openFilterModal(type) {
         title.textContent = 'Posterizar';
         desc.textContent = 'Reduce la cantidad de colores por canal.';
         addFilterSlider('Niveles', 2, 32, 6, (v) => applyFilters());
+    } else if (type === 'outline') {
+        title.textContent = 'Contorno (Stroke)';
+        desc.textContent = 'Añade un contorno exterior a los bordes sólidos del PNG.';
+
+        // Color picker para el contorno
+        const outlineColorWrap = document.createElement('div');
+        outlineColorWrap.style.cssText = 'display:flex; justify-content:space-between; align-items:center; padding:6px 0;';
+        outlineColorWrap.innerHTML = `
+            <label style="font-size:11px; font-weight:700; color:#444;">Color del contorno</label>
+            <div style="display:flex; align-items:center; gap:8px;">
+                <div id="outline-color-swatch" style="width:28px; height:28px; border-radius:6px; border:2px solid rgba(0,0,0,0.15); background:#000000; box-shadow:0 2px 6px rgba(0,0,0,0.2); cursor:pointer;"></div>
+                <input type="color" id="outline-color-picker" value="#000000" style="width:0; height:0; opacity:0; position:absolute; pointer-events:none;">
+            </div>
+        `;
+        container.appendChild(outlineColorWrap);
+
+        const outlinePicker = outlineColorWrap.querySelector('#outline-color-picker');
+        const outlineSwatch = outlineColorWrap.querySelector('#outline-color-swatch');
+        outlineSwatch.onclick = () => outlinePicker.click();
+        outlinePicker.oninput = () => {
+            outlineSwatch.style.background = outlinePicker.value;
+            applyFilters();
+        };
+
+        addFilterSlider('Grosor Externo (px)', 0, 40, 4, (v) => applyFilters());
+        addFilterSlider('Umbral Alpha', 1, 255, 10, (v) => applyFilters());
+        addFilterSlider('Opacidad (%)', 0, 100, 100, (v) => applyFilters());
+        addFilterSlider('Suavizado bordes', 0, 8, 0, (v) => applyFilters());
+        addFilterSlider('Grosor Interno (px)', 0, 40, 0, (v) => applyFilters());
     } else if (type === 'chroma') {
         title.textContent = 'Quitar Fondo (Chroma Key)';
         desc.textContent = 'Selecciona un color para volverlo transparente. Usa los lazos para refinar.';
@@ -1323,6 +1375,128 @@ function applyFilters() {
             data[i + 1] = Math.round(data[i + 1] / step) * step;
             data[i + 2] = Math.round(data[i + 2] / step) * step;
         }
+    } else if (activeFilterType === 'outline') {
+        const size       = parseInt(sliders[0].value);
+        const threshold  = parseInt(sliders[1].value);  // alpha mínimo para considerarse sólido
+        const opacity    = parseInt(sliders[2].value) / 100;
+        const feather    = parseInt(sliders[3].value);  // suavizado en px
+        const innerSize  = parseInt(sliders[4].value);
+
+        const colorPicker = document.getElementById('outline-color-picker');
+        const [oR, oG, oB] = hexToRgbArray(colorPicker ? colorPicker.value : '#000000');
+        const oA = Math.round(opacity * 255);
+
+        const w = paperWidth, h = paperHeight;
+        const orig = filterOriginalImgData.data;
+
+        // Verify cache to avoid expensive recalculation on color/opacity change
+        if (outlineCache.params.size !== size || outlineCache.params.threshold !== threshold || 
+            outlineCache.params.feather !== feather || outlineCache.params.inner !== innerSize ||
+            !outlineCache.solid) {
+            
+            const solid = new Uint8Array(w * h);
+            const trans = new Uint8Array(w * h);
+            for (let i = 0; i < orig.length; i += 4) {
+                if (orig[i + 3] >= threshold) solid[i >> 2] = 1;
+                else trans[i >> 2] = 1;
+            }
+
+            // Function to compute distance map
+            const computeDist = (mask, radius) => {
+                const map = new Float32Array(w * h).fill(Infinity);
+                if (radius <= 0) return map;
+                const hDil = new Uint8Array(w * h);
+                const rowP = new Int32Array(w + 1);
+                for (let y = 0; y < h; y++) {
+                    const base = y * w; rowP[0] = 0;
+                    for (let x = 0; x < w; x++) rowP[x + 1] = rowP[x] + mask[base + x];
+                    for (let x = 0; x < w; x++) {
+                        const l = Math.max(0, x - radius), r = Math.min(w - 1, x + radius);
+                        if (rowP[r + 1] - rowP[l] > 0) hDil[base + x] = 1;
+                    }
+                }
+                const dil = new Uint8Array(w * h);
+                const colP = new Int32Array(h + 1);
+                for (let x = 0; x < w; x++) {
+                    colP[0] = 0;
+                    for (let y = 0; y < h; y++) colP[y + 1] = colP[y] + hDil[y * w + x];
+                    for (let y = 0; y < h; y++) {
+                        const t = Math.max(0, y - radius), b = Math.min(h - 1, y + radius);
+                        if (colP[b + 1] - colP[t] > 0) dil[y * w + x] = 1;
+                    }
+                }
+                for (let y = 0; y < h; y++) {
+                    for (let x = 0; x < w; x++) {
+                        const idx = y * w + x;
+                        if (mask[idx]) { map[idx] = 0; continue; }
+                        if (!dil[idx]) continue;
+                        let minDist2 = Infinity;
+                        const yMin = Math.max(0, y - radius), yMax = Math.min(h - 1, y + radius);
+                        const xMin = Math.max(0, x - radius), xMax = Math.min(w - 1, x + radius);
+                        outer: for (let ny = yMin; ny <= yMax; ny++) {
+                            const dy = ny - y, dy2 = dy * dy;
+                            if (dy2 >= minDist2) continue;
+                            for (let nx = xMin; nx <= xMax; nx++) {
+                                if (!mask[ny * w + nx]) continue;
+                                const d2 = (nx - x)*(nx - x) + dy2;
+                                if (d2 < minDist2) { minDist2 = d2; if (minDist2 === 1) break outer; }
+                            }
+                        }
+                        map[idx] = Math.sqrt(minDist2);
+                    }
+                }
+                return map;
+            };
+
+            outlineCache.solid = solid;
+            outlineCache.outerDist = computeDist(solid, size);
+            outlineCache.innerDist = computeDist(trans, innerSize);
+            outlineCache.params = { size, threshold, feather, inner: innerSize };
+        }
+
+        const solid = outlineCache.solid;
+        const outerDist = outlineCache.outerDist;
+        const innerDist = outlineCache.innerDist;
+
+        for (let i = 0; i < data.length; i += 4) {
+            const idx = i >> 2;
+            const isSolid = solid[idx];
+            
+            let alpha = 0;
+            if (!isSolid && outerDist[idx] <= size && size > 0) {
+                alpha = oA;
+                if (feather > 0) {
+                    const edge = outerDist[idx] / size;
+                    const start = 1 - (feather / size);
+                    if (edge > start) alpha = Math.round(oA * (1 - (edge - start) / (1 - start || 0.001)));
+                }
+            } else if (isSolid && innerDist[idx] <= innerSize && innerSize > 0) {
+                alpha = oA;
+                if (feather > 0) {
+                    const edge = innerDist[idx] / innerSize;
+                    const start = 1 - (feather / innerSize);
+                    if (edge > start) alpha = Math.round(oA * (1 - (edge - start) / (1 - start || 0.001)));
+                }
+            }
+
+            if (alpha <= 0) continue;
+
+            const origA = orig[i + 3];
+            
+            if (origA === 0) {
+                // Si el pixel original es 100% transparente, solo pintamos el contorno
+                data[i] = oR; data[i + 1] = oG; data[i + 2] = oB; data[i + 3] = alpha;
+            } else {
+                // Composición Source-Over: El contorno (Source) se pinta SIEMPRE por encima del pixel original (Destination)
+                const aSrc = alpha / 255;
+                const aDst = origA / 255;
+                const outA = aSrc + aDst * (1 - aSrc);
+                data[i]     = Math.round((oR * aSrc + orig[i] * aDst * (1 - aSrc)) / outA);
+                data[i + 1] = Math.round((oG * aSrc + orig[i + 1] * aDst * (1 - aSrc)) / outA);
+                data[i + 2] = Math.round((oB * aSrc + orig[i + 2] * aDst * (1 - aSrc)) / outA);
+                data[i + 3] = Math.round(outA * 255);
+            }
+        }
     } else if (activeFilterType === 'chroma') {
         const keyRGB = hexToRgbArray(chromaKeyColor, 255);
         const threshSq = chromaThreshold * chromaThreshold;
@@ -1367,9 +1541,14 @@ function commitFilter() {
     filterOriginalImgData = null;
     activeFilterType = null;
     chromaDebugBG = null;
-    currentTool = filterPrevTool;
+    outlineCache.solid = null; outlineCache.outerDist = null; outlineCache.innerDist = null;
+    // Asegurar que la herramienta restaurada sea válida y nunca 'none'
+    currentTool = (filterPrevTool && filterPrevTool !== 'none') ? filterPrevTool : 'pincel';
     chromaLassoMode = 'none';
+    blackWhiteBgMode = 'transparent'; // Limpiar estado para próxima apertura
+    layersCacheDirty = true;
     updateThumbnails(); updateLayersUI();
+    requestRender();
 }
 
 function cancelFilter() {
@@ -1380,6 +1559,7 @@ function cancelFilter() {
     filterOriginalImgData = null;
     activeFilterType = null;
     chromaDebugBG = null;
+    outlineCache.solid = null; outlineCache.outerDist = null; outlineCache.innerDist = null;
     currentTool = filterPrevTool;
     chromaLassoMode = 'none';
     requestRender();
@@ -2440,8 +2620,8 @@ function getFlatImage() {
     flat.width = paperWidth; flat.height = paperHeight;
     const fctx = flat.getContext('2d');
 
-    if (!transparentBG) {
-        fctx.fillStyle = 'white';
+    if (bgMode === 1) {
+        fctx.fillStyle = solidBgColor;
         fctx.fillRect(0, 0, paperWidth, paperHeight);
     }
 
@@ -2843,11 +3023,17 @@ function applyCanvasResizeDrag(dx, dy, handle, origW, origH) {
 //  CANVAS SETUP
 // ─────────────────────────────────────────────────────────────
 function createCheckerPattern() {
-    checkerPatternCanvas.width = 20; checkerPatternCanvas.height = 20;
-    const pctx = checkerPatternCanvas.getContext('2d');
-    pctx.fillStyle = '#ffffff'; pctx.fillRect(0, 0, 20, 20);
-    pctx.fillStyle = '#f0f0f0'; pctx.fillRect(0, 0, 10, 10); pctx.fillRect(10, 10, 10, 10);
-    checkerPattern = ctx.createPattern(checkerPatternCanvas, 'repeat');
+    checkerPatternLightCanvas.width = 20; checkerPatternLightCanvas.height = 20;
+    const pctx1 = checkerPatternLightCanvas.getContext('2d');
+    pctx1.fillStyle = '#ffffff'; pctx1.fillRect(0, 0, 20, 20);
+    pctx1.fillStyle = '#f0f0f0'; pctx1.fillRect(0, 0, 10, 10); pctx1.fillRect(10, 10, 10, 10);
+    checkerPatternLight = ctx.createPattern(checkerPatternLightCanvas, 'repeat');
+
+    checkerPatternDarkCanvas.width = 20; checkerPatternDarkCanvas.height = 20;
+    const pctx2 = checkerPatternDarkCanvas.getContext('2d');
+    pctx2.fillStyle = '#2a2a2a'; pctx2.fillRect(0, 0, 20, 20);
+    pctx2.fillStyle = '#3a3a3a'; pctx2.fillRect(0, 0, 10, 10); pctx2.fillRect(10, 10, 10, 10);
+    checkerPatternDark = ctx.createPattern(checkerPatternDarkCanvas, 'repeat');
 }
 function startApp(w, h, initialImg = null) {
     paperWidth = w || 1920; paperHeight = h || 1080;
@@ -3077,14 +3263,16 @@ function duplicateSelectedLayer() {
     pushHistory();
 }
 
-function toggleBackground() {
-    transparentBG = !transparentBG;
+function updateBgUI() {
     const btnIcon = document.getElementById('toggle-bg-icon');
-    if (btnIcon) {
-        btnIcon.src = transparentBG ? "iconos acciones de capas/fondo transparente OFF.png" : "iconos acciones de capas/fondo transparente ON.png";
-    }
+    if (btnIcon) btnIcon.src = `iconos acciones de capas/modo ${bgMode}.png`;
     const btn = document.getElementById('toggle-bg-btn');
-    if (btn) btn.title = transparentBG ? "Fondo transparente OFF" : "Fondo transparente ON";
+    if (btn) btn.title = bgMode === 1 ? "Fondo sólido (Click derecho para color)" : (bgMode === 2 ? "Fondo transparente (Oscuro)" : "Fondo transparente (Claro)");
+}
+
+function toggleBackground() {
+    bgMode = bgMode === 1 ? 2 : (bgMode === 2 ? 3 : 1);
+    updateBgUI();
     requestRender();
 }
 function mergeLayerDown(index) {
@@ -3148,6 +3336,7 @@ function mergeLayerDown(index) {
 }
 
 function updateThumbnails() {
+    layersCacheDirty = true;
     layers.forEach(l => {
         const thumbCanvas = document.createElement('canvas');
         thumbCanvas.width = 40;
@@ -3182,17 +3371,43 @@ function updateLayersUI() {
         const nameSpan = document.createElement('span');
         nameSpan.className = 'layer-name';
         nameSpan.textContent = l.name;
+        nameSpan.ondblclick = (e) => {
+            e.stopPropagation();
+            const input = document.createElement('input');
+            input.type = 'text';
+            input.value = l.name;
+            input.style.cssText = 'width: 80px; font-size: 11px; padding: 2px; border: 1px solid #007bff; border-radius: 3px; margin-left: 5px;';
+            const saveName = () => {
+                if (input.value.trim() !== '') {
+                    l.name = input.value.trim();
+                }
+                updateLayersUI();
+                pushHistory();
+            };
+            input.onblur = saveName;
+            input.onkeydown = (ev) => { if (ev.key === 'Enter') { ev.preventDefault(); saveName(); } };
+            mainInfo.replaceChild(input, nameSpan);
+            input.focus();
+            input.select();
+        };
         mainInfo.appendChild(nameSpan);
         li.appendChild(mainInfo);
         const controls = document.createElement('div');
         controls.className = 'layer-controls';
+        
+        // Evitar que el drag and drop se active al usar el slider de opacidad u otros controles
+        controls.onmousedown = () => { li.draggable = false; };
+        controls.onmouseup = () => { li.draggable = true; };
+        controls.onmouseleave = () => { li.draggable = true; };
+
         const opacitySlider = document.createElement('input');
         opacitySlider.type = 'range';
         opacitySlider.className = 'layer-opacity-slider';
         opacitySlider.min = 0;
         opacitySlider.max = 100;
         opacitySlider.value = Math.round(l.opacity * 100);
-        opacitySlider.oninput = () => { l.opacity = opacitySlider.value / 100; requestRender(); };
+        opacitySlider.oninput = () => { l.opacity = opacitySlider.value / 100; layersCacheDirty = true; requestRender(); };
+        opacitySlider.onchange = (e) => { pushHistory(); e.target.blur(); };
         controls.appendChild(opacitySlider);
         const buttons = document.createElement('div');
         buttons.className = 'layer-buttons';
@@ -3200,19 +3415,19 @@ function updateLayersUI() {
         visBtn.className = 'mini-tool-btn' + (l.visible ? '' : ' status-invisible');
         visBtn.title = 'Visible';
         visBtn.innerHTML = '<img src="simbolo ojo abierto.png">';
-        visBtn.onclick = (e) => { e.stopPropagation(); l.visible = !l.visible; layersCacheDirty = true; updateThumbnails(); updateLayersUI(); requestRender(); };
+        visBtn.onclick = (e) => { e.stopPropagation(); l.visible = !l.visible; layersCacheDirty = true; updateThumbnails(); updateLayersUI(); pushHistory(); requestRender(); };
         buttons.appendChild(visBtn);
         const lockBtn = document.createElement('button');
         lockBtn.className = 'mini-tool-btn' + (l.alphaLocked ? ' status-alpha' : '');
         lockBtn.title = 'Bloquear Alpha';
         lockBtn.innerHTML = '<img src="Simbolo alpha.png">';
-        lockBtn.onclick = (e) => { e.stopPropagation(); l.alphaLocked = !l.alphaLocked; updateLayersUI(); };
+        lockBtn.onclick = (e) => { e.stopPropagation(); l.alphaLocked = !l.alphaLocked; updateLayersUI(); pushHistory(); };
         buttons.appendChild(lockBtn);
         const clipBtn = document.createElement('button');
         clipBtn.className = 'mini-tool-btn' + (l.clippingMask ? ' status-clipping' : '');
         clipBtn.title = 'Máscara de Recorte';
         clipBtn.innerHTML = '<img src="Simbolo mascara de recorte.png">';
-        clipBtn.onclick = (e) => { e.stopPropagation(); l.clippingMask = !l.clippingMask; layersCacheDirty = true; updateLayersUI(); requestRender(); };
+        clipBtn.onclick = (e) => { e.stopPropagation(); l.clippingMask = !l.clippingMask; layersCacheDirty = true; updateLayersUI(); pushHistory(); requestRender(); };
         buttons.appendChild(clipBtn);
         const mergeBtn = document.createElement('button');
         mergeBtn.className = 'mini-tool-btn';
@@ -3245,7 +3460,7 @@ function updateLayersUI() {
             if (bm.value === l.blendMode) opt.selected = true;
             blendSelect.appendChild(opt);
         });
-        blendSelect.onchange = () => { l.blendMode = blendSelect.value; layersCacheDirty = true; requestRender(); };
+        blendSelect.onchange = () => { l.blendMode = blendSelect.value; layersCacheDirty = true; pushHistory(); requestRender(); };
         controls.appendChild(blendSelect);
         li.appendChild(controls);
         li.onclick = () => {
@@ -3253,6 +3468,7 @@ function updateLayersUI() {
                 endPushSession();
                 selectedLayerIndex = i;
                 updateLayersUI();
+                pushHistory();
                 requestRender();
             }
         };
@@ -3343,7 +3559,7 @@ function executeBucket(worldX, worldY) {
         // Composite all layers into a temp canvas for sampling
         const tmpC = document.createElement('canvas'); tmpC.width = paperWidth; tmpC.height = paperHeight;
         const tmpX = tmpC.getContext('2d');
-        if (!transparentBG) { tmpX.fillStyle = 'white'; tmpX.fillRect(0, 0, paperWidth, paperHeight); }
+        if (bgMode === 1) { tmpX.fillStyle = solidBgColor; tmpX.fillRect(0, 0, paperWidth, paperHeight); }
         compositeLayers(tmpX);
         srcData = tmpX.getImageData(0, 0, paperWidth, paperHeight).data;
     } else {
@@ -4423,7 +4639,9 @@ function render() {
     if (activeFilterType === 'chroma' && chromaDebugBG) {
         ctx.fillStyle = chromaDebugBG;
     } else {
-        ctx.fillStyle = transparentBG ? checkerPattern : '#ffffff';
+        if (bgMode === 1) ctx.fillStyle = solidBgColor;
+        else if (bgMode === 2) ctx.fillStyle = checkerPatternDark;
+        else ctx.fillStyle = checkerPatternLight;
     }
     ctx.fillRect(0, 0, paperWidth, paperHeight); ctx.restore();
 
@@ -4906,7 +5124,7 @@ function pickColorAt(worldX, worldY) {
     const temp = document.createElement('canvas'); temp.width = 1; temp.height = 1;
     const tctx = temp.getContext('2d');
 
-    if (!transparentBG) { tctx.fillStyle = '#ffffff'; tctx.fillRect(0, 0, 1, 1); }
+    if (bgMode === 1) { tctx.fillStyle = solidBgColor; tctx.fillRect(0, 0, 1, 1); }
 
     layers.forEach(l => {
         if (!l.visible) return;
@@ -4997,8 +5215,24 @@ function handleGlobalShortcuts(e) {
         return;
     }
 
-    const t = toolsData.find(x => (x.shortcut || '').toLowerCase() === key); if (t) selectTool(t.id, t.name);
-    const bt = brushTypesData.find(x => (x.shortcut || '').toLowerCase() === key); if (bt) selectTool('pincel', bt.name);
+    const t = toolsData.find(x => {
+        const k = (x.shortcut || '').toLowerCase();
+        if (!k || k !== key) return false;
+        const mod = x.modifier || 'normal';
+        if (mod === '+shift') return e.shiftKey && !e.ctrlKey;
+        if (mod === '+shift+ctrl') return e.shiftKey && e.ctrlKey;
+        return !e.shiftKey && !e.ctrlKey;
+    });
+    if (t) { selectTool(t.id, t.name); return; }
+    const bt = brushTypesData.find(x => {
+        const k = (x.shortcut || '').toLowerCase();
+        if (!k || k !== key) return false;
+        const mod = x.modifier || 'normal';
+        if (mod === '+shift') return e.shiftKey && !e.ctrlKey;
+        if (mod === '+shift+ctrl') return e.shiftKey && e.ctrlKey;
+        return !e.shiftKey && !e.ctrlKey;
+    });
+    if (bt) { selectTool('pincel', bt.name); return; }
 
     // Check palette shortcuts
     const pc = paletteColors.find(p => (p.s || '').toLowerCase() === key);
@@ -5021,29 +5255,64 @@ function renderMenuList(cont, data, type) {
     cont.innerHTML = '';
     data.forEach(item => {
         const li = document.createElement('li'); li.className = 'tool-item';
-        li.innerHTML = `<span>${item.name}</span><input type="text" class="tool-shortcut-input" maxlength="1" value="${item.shortcut || ''}">`;
-        li.onclick = e => { if (e.target.tagName !== 'INPUT') { type === 'brush' ? selectTool('pincel', item.name) : selectTool(item.id, item.name); } };
-        li.querySelector('input').onkeydown = e => { if (e.key.length === 1) { e.preventDefault(); checkAndAssignShortcut(item, e.key.toLowerCase(), type); } };
+        const nameSpan = document.createElement('span');
+        nameSpan.textContent = item.name;
+        const shortcutInput = document.createElement('input');
+        shortcutInput.type = 'text';
+        shortcutInput.className = 'tool-shortcut-input';
+        shortcutInput.maxLength = 1;
+        shortcutInput.value = item.shortcut || '';
+        const modSelect = document.createElement('select');
+        modSelect.className = 'tool-shortcut-modifier';
+        modSelect.style.cssText = 'font-size:10px; padding:1px 2px; border:1px solid #ccc; border-radius:3px; background:#222; color:#ddd; cursor:pointer; margin-left:3px;';
+        modSelect.title = 'Modificador del atajo';
+        [['normal', 'Normal'], ['+shift', '+Shift'], ['+shift+ctrl', '+Shift+Ctrl']].forEach(([v, l]) => {
+            const opt = document.createElement('option');
+            opt.value = v; opt.textContent = l;
+            if ((item.modifier || 'normal') === v) opt.selected = true;
+            modSelect.appendChild(opt);
+        });
+        modSelect.onchange = () => { item.modifier = modSelect.value; saveShortcuts(); };
+        li.appendChild(nameSpan);
+        li.appendChild(shortcutInput);
+        li.appendChild(modSelect);
+        li.onclick = e => { if (e.target.tagName !== 'INPUT' && e.target.tagName !== 'SELECT') { type === 'brush' ? selectTool('pincel', item.name) : selectTool(item.id, item.name); } };
+        shortcutInput.onkeydown = e => { if (e.key.length === 1) { e.preventDefault(); checkAndAssignShortcut(item, e.key.toLowerCase(), type); } };
         cont.appendChild(li);
     });
 }
 function checkAndAssignShortcut(item, key, type) {
+    // Read the modifier currently selected in the dropdown for this item
+    const itemModifier = item.modifier || 'normal';
+    const combo = key + '|' + itemModifier; // unique combo: e.g. "b|normal" vs "b|+shift"
+
     const ms = (mainShortcutInput?.value || '').toLowerCase(), bs = (brushShortcutInput?.value || '').toLowerCase(), ls = (layersShortcutInput?.value || '').toLowerCase(), cs = (colorsShortcutInput?.value || '').toLowerCase();
-    let conflict = key === ms ? 'Atajo Principal' : key === bs ? 'Atajo Pincel' : key === ls ? 'Atajo Capas' : key === cs ? 'Atajo Colores' : null;
-    const tc = toolsData.find(t => (t.shortcut || '').toLowerCase() === key && t !== item);
-    const bc = brushTypesData.find(b => (b.shortcut || '').toLowerCase() === key && b !== item);
-    const cc = paletteColors.find(p => (p.s || '').toLowerCase() === key);
+
+    // Menu-level shortcuts only use 'normal' modifier, so only conflict if modifier is also 'normal'
+    let conflict = null;
+    if (itemModifier === 'normal') {
+        conflict = key === ms ? 'Atajo Principal' : key === bs ? 'Atajo Pincel' : key === ls ? 'Atajo Capas' : key === cs ? 'Atajo Colores' : null;
+    }
+
+    // Check tool/brush conflicts: same key AND same modifier
+    const tc = toolsData.find(t => (t.shortcut || '').toLowerCase() === key && (t.modifier || 'normal') === itemModifier && t !== item);
+    const bc = brushTypesData.find(b => (b.shortcut || '').toLowerCase() === key && (b.modifier || 'normal') === itemModifier && b !== item);
+    // Palette shortcuts are always 'normal'
+    const cc = itemModifier === 'normal' ? paletteColors.find(p => (p.s || '').toLowerCase() === key) : null;
 
     if (tc) conflict = tc.name;
     else if (bc) conflict = bc.name;
     else if (cc) conflict = `Color en paleta (${cc.c})`;
 
+    const modLabel = itemModifier === 'normal' ? '' : ' (' + itemModifier + ')';
     if (conflict) {
-        if (confirm(`La tecla "${key.toUpperCase()}" ya está siendo usada por "${conflict}". ¿Quieres sobrescribirla?`)) {
-            if (key === ms && mainShortcutInput) mainShortcutInput.value = '';
-            if (key === bs && brushShortcutInput) brushShortcutInput.value = '';
-            if (key === ls && layersShortcutInput) layersShortcutInput.value = '';
-            if (key === cs && colorsShortcutInput) colorsShortcutInput.value = '';
+        if (confirm(`La tecla "${key.toUpperCase()}${modLabel}" ya está siendo usada por "${conflict}". ¿Quieres sobrescribirla?`)) {
+            if (itemModifier === 'normal') {
+                if (key === ms && mainShortcutInput) mainShortcutInput.value = '';
+                if (key === bs && brushShortcutInput) brushShortcutInput.value = '';
+                if (key === ls && layersShortcutInput) layersShortcutInput.value = '';
+                if (key === cs && colorsShortcutInput) colorsShortcutInput.value = '';
+            }
             if (tc) tc.shortcut = '';
             else if (bc) bc.shortcut = '';
             if (cc) cc.s = null;
@@ -5060,8 +5329,8 @@ function saveShortcuts() {
         main: mainShortcutInput?.value || '', brushMenu: brushShortcutInput?.value || '',
         layersMenu: layersShortcutInput?.value || '', colorsMenu: colorsShortcutInput?.value || '',
         config: configShortcutInput?.value || '',
-        tools: toolsData.map(t => ({ id: t.id, shortcut: t.shortcut })),
-        brushes: brushTypesData.map(b => ({ id: b.id, shortcut: b.shortcut }))
+        tools: toolsData.map(t => ({ id: t.id, shortcut: t.shortcut, modifier: t.modifier || 'normal' })),
+        brushes: brushTypesData.map(b => ({ id: b.id, shortcut: b.shortcut, modifier: b.modifier || 'normal' }))
     }));
 }
 function loadShortcuts() {
@@ -5073,8 +5342,8 @@ function loadShortcuts() {
         if (layersShortcutInput) layersShortcutInput.value = s.layersMenu || '.';
         if (colorsShortcutInput) colorsShortcutInput.value = s.colorsMenu || '-';
         if (configShortcutInput) configShortcutInput.value = s.config || '{';
-        s.tools?.forEach(st => { const t = toolsData.find(x => x.id === st.id); if (t) t.shortcut = st.shortcut || t.shortcut; });
-        s.brushes?.forEach(sb => { const b = brushTypesData.find(x => x.id === sb.id); if (b) b.shortcut = sb.shortcut || b.shortcut; });
+        s.tools?.forEach(st => { const t = toolsData.find(x => x.id === st.id); if (t) { t.shortcut = st.shortcut || t.shortcut; t.modifier = st.modifier || 'normal'; } });
+        s.brushes?.forEach(sb => { const b = brushTypesData.find(x => x.id === sb.id); if (b) { b.shortcut = sb.shortcut || b.shortcut; b.modifier = sb.modifier || 'normal'; } });
     } catch (e) { }
 }
 

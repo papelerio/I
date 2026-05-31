@@ -355,12 +355,14 @@ body:not(.theme-classic) .tool-btn img {
 #multi-tool-menu {
     top: 50%;
     transform: translateY(-50%);
+    width: 310px;
 }
 
 #brush-type-menu {
     top: 40%;
     /* Adjusted to be near the brush button */
     transform: translateY(-50%);
+    width: 310px;
 }
 
 #config-menu {
@@ -522,18 +524,19 @@ body:not(.theme-classic) .tool-btn img {
     justify-content: space-between;
     align-items: center;
     padding: 10px 5px;
-    border-bottom: 1px solid #f9f9f9;
+    border-bottom: 1px solid rgba(255,255,255,0.07);
     cursor: pointer;
     transition: background 0.2s;
 }
 
 .tool-item:hover {
-    background: #f9f9f9;
+    background: rgba(255,255,255,0.08);
+    border-radius: 6px;
 }
 
 .tool-item span {
     font-size: 13px;
-    color: #444;
+    color: #ffffff;
 }
 
 .hidden {
