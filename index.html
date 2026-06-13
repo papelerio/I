@@ -17,12 +17,27 @@
         <div class="modal-content">
             <h1>Bienvenido a Pro Illustrator</h1>
             <p>Configura tu espacio de trabajo</p>
+            <div class="input-field" style="margin-bottom: 15px; text-align: left;">
+                <label style="display: block; margin-bottom: 5px; font-size: 14px; color: #ccc;">Plantillas de Tamaño</label>
+                <select id="canvas-preset-select" style="width: 100%; padding: 8px; border-radius: 5px; background: #222; color: white; border: 1px solid #444; outline: none; cursor: pointer;">
+                    <option value="1920x1080">Full HD (1920 x 1080)</option>
+                    <option value="1280x720">HD (1280 x 720)</option>
+                    <option value="1080x1080">Cuadrado / IG (1080 x 1080)</option>
+                    <option value="1275x1650">Carta (1275 x 1650)</option>
+                    <option value="1000x1500">Oficio (1000 x 1500)</option>
+                    <option value="1240x1754">A4 (1240 x 1754)</option>
+                    <option value="custom">Personalizado</option>
+                </select>
+            </div>
 
-            <div class="setup-group">
+            <div class="setup-group" style="align-items: flex-end;">
                 <div class="input-field">
                     <label>Ancho (px)</label>
                     <input type="number" id="canvas-width" value="1920">
                 </div>
+                <button id="swap-dimensions-btn" title="Intercambiar Orientación (Horizontal/Vertical)" style="background: #333; border: 1px solid #555; color: white; border-radius: 5px; cursor: pointer; padding: 0 15px; height: 42px; font-size: 20px; display: flex; align-items: center; justify-content: center; transition: background 0.2s;">
+                    ⇄
+                </button>
                 <div class="input-field">
                     <label>Alto (px)</label>
                     <input type="number" id="canvas-height" value="1080">

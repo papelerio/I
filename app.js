@@ -48,9 +48,42 @@ const startupModal = document.getElementById('startup-modal');
 const mainApp = document.getElementById('main-app');
 const canvasWidthInput = document.getElementById('canvas-width');
 const canvasHeightInput = document.getElementById('canvas-height');
+const canvasPresetSelect = document.getElementById('canvas-preset-select');
 const createBtn = document.getElementById('create-btn');
 const importBtn = document.getElementById('import-btn');
 const fileInput = document.getElementById('file-input');
+
+// Handle canvas preset selection
+if (canvasPresetSelect) {
+    canvasPresetSelect.addEventListener('change', (e) => {
+        const val = e.target.value;
+        if (val !== 'custom') {
+            const [w, h] = val.split('x');
+            canvasWidthInput.value = w;
+            canvasHeightInput.value = h;
+        }
+    });
+
+    const resetToCustom = () => {
+        canvasPresetSelect.value = 'custom';
+    };
+    canvasWidthInput.addEventListener('input', resetToCustom);
+    canvasHeightInput.addEventListener('input', resetToCustom);
+}
+
+const swapDimensionsBtn = document.getElementById('swap-dimensions-btn');
+if (swapDimensionsBtn) {
+    swapDimensionsBtn.addEventListener('click', () => {
+        const temp = canvasWidthInput.value;
+        canvasWidthInput.value = canvasHeightInput.value;
+        canvasHeightInput.value = temp;
+        
+        if (canvasPresetSelect) {
+            canvasPresetSelect.value = 'custom';
+        }
+    });
+}
+
 let startupImportState = 0; // 0: default, 1: waiting for paste
 let layerImportState = 0; // 0: default, 1: waiting for paste (layers panel)
 let isDraggingLayer = false; // true while an internal layer drag-and-drop is in progress
@@ -203,6 +236,7 @@ let isTemporaryPan = false;
 
 // Lasso/Bucket State
 let lassoPath = [];
+let lassoLastScreenX = null, lassoLastScreenY = null;
 let bucketMode = 'capa';        // 'capa' | 'lienzo' — which source to sample from
 let bucketTolerance = 32;       // 0–255 color match tolerance
 let bucketContiguous = true;    // flood-fill (true) vs global pixel replace (false)
@@ -486,6 +520,7 @@ const brushTypesData = [
     { id: 'duro', name: 'Pincel Duro', shortcut: 'a', hardness: 0.8, useCompositing: true, useTexture: false, size: 2, opacity: 1.00, blur: 0 },
     { id: 'suave', name: 'Pincel Suave', shortcut: 'c', hardness: 0.3, useCompositing: false, useTexture: false, size: 2, opacity: 0.15, blur: 0 },
     { id: 'borrador', name: 'Borrador', shortcut: 's', hardness: 0.8, useCompositing: false, useTexture: false, isEraser: true, size: 3, opacity: 1.00, blur: 0 },
+    { id: 'borrador-suave', name: 'Borrador Suave', shortcut: 's', modifier: '+shift', hardness: 0.3, useCompositing: false, useTexture: false, isEraser: true, size: 7, opacity: 0.50, blur: 0 },
     { id: 'aero-duro', name: 'Aerógrafo Duro', shortcut: 'e', hardness: 0.8, useCompositing: true, useTexture: false, size: 1, opacity: 1.00, blur: 12 },
     { id: 'aero-suave', name: 'Aerógrafo Suave', shortcut: 'd', hardness: 0.2, useCompositing: true, useTexture: true, size: 3, opacity: 1.00, blur: 25 },
     { id: 'lazo-relleno', name: 'Lazo de Relleno', shortcut: 'q', hardness: 1.0, isLasso: true, lassoColor: '#ff00ff', size: 10, opacity: 1.00, blur: 0 },
@@ -823,7 +858,14 @@ let activeFilterType = null;
 let filterOriginalImgData = null;
 
 // Curves state
-let curvePoints = [{ x: 0, y: 255 }, { x: 255, y: 0 }];
+let curvesData = {
+    rgb: [{ x: 0, y: 255 }, { x: 255, y: 0 }],
+    r: [{ x: 0, y: 255 }, { x: 255, y: 0 }],
+    g: [{ x: 0, y: 255 }, { x: 255, y: 0 }],
+    b: [{ x: 0, y: 255 }, { x: 255, y: 0 }]
+};
+let curvesSmoothState = { rgb: true, r: true, g: true, b: true };
+let activeCurveChannel = 'rgb';
 let draggingCurvePoint = null;
 let edgesBgMode = 'transparent';
 let blackWhiteBgMode = 'transparent';
@@ -875,7 +917,14 @@ function openFilterModal(type) {
     } else if (type === 'levels') {
         title.textContent = 'Curvas de Nivel';
         desc.textContent = 'Ajusta el histograma arrastrando los puntos.';
-        curvePoints = [{ x: 0, y: 255 }, { x: 255, y: 0 }]; // Reset to default when opening
+        curvesData = {
+            rgb: [{ x: 0, y: 255 }, { x: 255, y: 0 }],
+            r: [{ x: 0, y: 255 }, { x: 255, y: 0 }],
+            g: [{ x: 0, y: 255 }, { x: 255, y: 0 }],
+            b: [{ x: 0, y: 255 }, { x: 255, y: 0 }]
+        };
+        curvesSmoothState = { rgb: true, r: true, g: true, b: true };
+        activeCurveChannel = 'rgb';
         addFilterCurveEditor(container);
     } else if (type === 'hue') {
         title.textContent = 'Cambiar Tono';
@@ -1085,7 +1134,72 @@ function addFilterToggle(label, modes, current, onclick) {
 
 // ── Curve Editor UI & Logic ──
 
+function generateCurveLut(points, isSmooth) {
+    const lut = new Uint8Array(256);
+    if (!isSmooth || points.length < 3) {
+        for (let i = 0; i < points.length - 1; i++) {
+            const p1 = points[i], p2 = points[i + 1];
+            for (let x = p1.x; x <= p2.x; x++) {
+                const t = (x - p1.x) / (p2.x - p1.x || 1);
+                lut[x] = Math.max(0, Math.min(255, 255 - (p1.y + t * (p2.y - p1.y))));
+            }
+        }
+    } else {
+        const n = points.length;
+        const m = new Float32Array(n);
+        const d = new Float32Array(n - 1);
+        for (let i = 0; i < n - 1; i++) {
+            d[i] = (points[i+1].y - points[i].y) / (points[i+1].x - points[i].x || 1);
+        }
+        m[0] = d[0];
+        m[n - 1] = d[n - 2];
+        for (let i = 1; i < n - 1; i++) {
+            if (d[i-1] * d[i] <= 0) m[i] = 0;
+            else m[i] = (d[i-1] + d[i]) / 2;
+        }
+        for (let i = 0; i < n - 1; i++) {
+            const p0 = points[i], p1 = points[i+1];
+            const h = p1.x - p0.x;
+            for (let x = p0.x; x <= p1.x; x++) {
+                if (h === 0) {
+                    lut[x] = Math.max(0, Math.min(255, 255 - p0.y));
+                    continue;
+                }
+                const t = (x - p0.x) / h;
+                const t2 = t * t;
+                const t3 = t2 * t;
+                const h00 = 2*t3 - 3*t2 + 1;
+                const h10 = t3 - 2*t2 + t;
+                const h01 = -2*t3 + 3*t2;
+                const h11 = t3 - t2;
+                const y = h00 * p0.y + h10 * h * m[i] + h01 * p1.y + h11 * h * m[i+1];
+                lut[x] = Math.max(0, Math.min(255, 255 - y));
+            }
+        }
+    }
+    return lut;
+}
+
 function addFilterCurveEditor(container) {
+    const header = document.createElement('div');
+    header.style.marginBottom = '10px';
+    header.style.display = 'flex';
+    header.style.justifyContent = 'center';
+    header.style.alignItems = 'center';
+    header.style.gap = '10px';
+    header.innerHTML = `
+        <select id="curveChannelSelect" style="flex: 1; border: 1px solid #444; border-radius: 5px; padding: 4px; font-size: 12px; cursor: pointer; outline: none; font-weight: bold; color: black;">
+            <option value="rgb">RGB (Global)</option>
+            <option value="r">Rojo (Red)</option>
+            <option value="g">Verde (Green)</option>
+            <option value="b">Azul (Blue)</option>
+        </select>
+        <label style="font-size: 11px; display: flex; align-items: center; gap: 4px; cursor: pointer; color: #ddd; white-space: nowrap;" title="Interpola la curva con suavizado Spline">
+            <input type="checkbox" id="curveSmoothToggle" checked> Curva "S"
+        </label>
+    `;
+    container.appendChild(header);
+
     const area = document.createElement('div');
     area.className = 'curve-area';
     area.innerHTML = `
@@ -1097,14 +1211,42 @@ function addFilterCurveEditor(container) {
     `;
     container.appendChild(area);
 
+    const select = header.querySelector('#curveChannelSelect');
+    const smoothToggle = header.querySelector('#curveSmoothToggle');
+    
+    const updateSelectColor = () => {
+        if (activeCurveChannel === 'rgb') select.style.background = 'orange';
+        else if (activeCurveChannel === 'r') select.style.background = '#ff5555';
+        else if (activeCurveChannel === 'g') select.style.background = '#55ff55';
+        else if (activeCurveChannel === 'b') select.style.background = '#5555ff';
+        smoothToggle.checked = curvesSmoothState[activeCurveChannel];
+    };
+
+    select.value = activeCurveChannel;
+    updateSelectColor();
+    
+    select.addEventListener('change', (e) => {
+        activeCurveChannel = e.target.value;
+        updateSelectColor();
+        drawFilterHistogram();
+        updateCurveUI();
+    });
+
+    smoothToggle.addEventListener('change', (e) => {
+        curvesSmoothState[activeCurveChannel] = e.target.checked;
+        updateCurveUI();
+        applyFilters();
+    });
+
     const svg = area.querySelector('#curveSvg');
 
-    svg.addEventListener('mousedown', handleCurveMouseDown);
+    svg.style.touchAction = 'none'; // Prevent scroll on touch/pen
+    svg.addEventListener('pointerdown', handleCurveMouseDown);
     svg.addEventListener('dblclick', handleCurveDblClick);
 
     // Global listeners for dragging
-    window.addEventListener('mousemove', handleCurveMouseMove);
-    window.addEventListener('mouseup', handleCurveMouseUp);
+    window.addEventListener('pointermove', handleCurveMouseMove);
+    window.addEventListener('pointerup', handleCurveMouseUp);
 }
 
 function getCurveMousePos(e) {
@@ -1119,13 +1261,18 @@ function getCurveMousePos(e) {
 
 function handleCurveMouseDown(e) {
     const pos = getCurveMousePos(e);
+    const curvePoints = curvesData[activeCurveChannel];
     const hitIndex = curvePoints.findIndex(p => Math.hypot(p.x - pos.x, p.y - pos.y) < 12);
-    if (hitIndex !== -1) draggingCurvePoint = hitIndex;
+    if (hitIndex !== -1) {
+        draggingCurvePoint = hitIndex;
+        e.preventDefault(); // Prevent text selection/drag behaviors
+    }
 }
 
 function handleCurveMouseMove(e) {
     if (draggingCurvePoint === null) return;
     const pos = getCurveMousePos(e);
+    const curvePoints = curvesData[activeCurveChannel];
 
     if (draggingCurvePoint === 0) {
         curvePoints[0].y = pos.y;
@@ -1147,6 +1294,7 @@ function handleCurveMouseUp() {
 
 function handleCurveDblClick(e) {
     const pos = getCurveMousePos(e);
+    const curvePoints = curvesData[activeCurveChannel];
     const hitIndex = curvePoints.findIndex(p => Math.hypot(p.x - pos.x, p.y - pos.y) < 12);
 
     if (hitIndex > 0 && hitIndex < curvePoints.length - 1) {
@@ -1164,7 +1312,27 @@ function updateCurveUI() {
     const svg = document.getElementById('curveSvg');
     if (!line || !svg) return;
 
-    line.setAttribute('points', curvePoints.map(p => `${p.x},${p.y}`).join(' '));
+    const curvePoints = curvesData[activeCurveChannel];
+    const isSmooth = curvesSmoothState[activeCurveChannel];
+    
+    if (isSmooth && curvePoints.length > 2) {
+        const lut = generateCurveLut(curvePoints, true);
+        const pathPoints = [];
+        let lastP = curvePoints[0];
+        pathPoints.push(`${lastP.x},${lastP.y}`);
+        for (let x = curvePoints[0].x; x <= curvePoints[curvePoints.length - 1].x; x++) {
+            pathPoints.push(`${x},${255 - lut[x]}`);
+        }
+        line.setAttribute('points', pathPoints.join(' '));
+    } else {
+        line.setAttribute('points', curvePoints.map(p => `${p.x},${p.y}`).join(' '));
+    }
+
+    let strokeColor = 'white';
+    if (activeCurveChannel === 'r') strokeColor = '#ff5555';
+    if (activeCurveChannel === 'g') strokeColor = '#55ff55';
+    if (activeCurveChannel === 'b') strokeColor = '#5555ff';
+    line.setAttribute('stroke', strokeColor);
 
     // Clear old circles
     svg.querySelectorAll('.curve-point').forEach(c => c.remove());
@@ -1175,6 +1343,7 @@ function updateCurveUI() {
         c.setAttribute("cy", p.y);
         c.setAttribute("r", 5);
         c.setAttribute("class", "curve-point");
+        c.setAttribute("fill", strokeColor);
         svg.appendChild(c);
     });
 }
@@ -1187,13 +1356,21 @@ function drawFilterHistogram() {
     const hist = new Array(256).fill(0);
 
     for (let i = 0; i < data.length; i += 4) {
-        const avg = Math.round((data[i] + data[i + 1] + data[i + 2]) / 3);
-        hist[avg]++;
+        let val;
+        if (activeCurveChannel === 'r') val = data[i];
+        else if (activeCurveChannel === 'g') val = data[i+1];
+        else if (activeCurveChannel === 'b') val = data[i+2];
+        else val = Math.round((data[i] + data[i + 1] + data[i + 2]) / 3);
+        hist[val]++;
     }
 
     const max = Math.max(...hist);
     hCtx.clearRect(0, 0, 256, 256);
-    hCtx.fillStyle = 'rgba(255, 255, 255, 0.4)';
+    
+    if (activeCurveChannel === 'r') hCtx.fillStyle = 'rgba(255, 85, 85, 0.4)';
+    else if (activeCurveChannel === 'g') hCtx.fillStyle = 'rgba(85, 255, 85, 0.4)';
+    else if (activeCurveChannel === 'b') hCtx.fillStyle = 'rgba(85, 85, 255, 0.4)';
+    else hCtx.fillStyle = 'rgba(255, 255, 255, 0.4)';
     for (let i = 0; i < 256; i++) {
         const h = (hist[i] / (max || 1)) * 256;
         hCtx.fillRect(i, 256 - h, 1, h);
@@ -1254,18 +1431,15 @@ function applyFilters() {
             }
         }
     } else if (activeFilterType === 'levels') {
-        const lut = new Uint8Array(256);
-        for (let i = 0; i < curvePoints.length - 1; i++) {
-            const p1 = curvePoints[i], p2 = curvePoints[i + 1];
-            for (let x = p1.x; x <= p2.x; x++) {
-                const t = (x - p1.x) / (p2.x - p1.x || 1);
-                lut[x] = 255 - (p1.y + t * (p2.y - p1.y));
-            }
-        }
+        const lutRGB = generateCurveLut(curvesData.rgb, curvesSmoothState.rgb);
+        const lutR = generateCurveLut(curvesData.r, curvesSmoothState.r);
+        const lutG = generateCurveLut(curvesData.g, curvesSmoothState.g);
+        const lutB = generateCurveLut(curvesData.b, curvesSmoothState.b);
+
         for (let i = 0; i < data.length; i += 4) {
-            data[i] = lut[data[i]];
-            data[i + 1] = lut[data[i + 1]];
-            data[i + 2] = lut[data[i + 2]];
+            data[i] = lutRGB[lutR[data[i]]];
+            data[i + 1] = lutRGB[lutG[data[i + 1]]];
+            data[i + 2] = lutRGB[lutB[data[i + 2]]];
         }
     } else if (activeFilterType === 'hue') {
         const hueShift = parseInt(sliders[0].value);
@@ -3785,6 +3959,7 @@ function handlePointerDown(e) {
     applyCursor(true);
     sctx.clearRect(0, 0, strokeCanvas.width, strokeCanvas.height);
     lassoPath = []; lassoSelPath = [];
+    lassoLastScreenX = null; lassoLastScreenY = null;
     const world = screenToWorld(e.offsetX, e.offsetY);
 
     // Filter Priority
@@ -3916,6 +4091,7 @@ function handlePointerDown(e) {
     else if (currentTool === 'pincel') {
         if (currentBrush.isLasso) {
             lassoPath.push({ x: world.x, y: world.y });
+            lassoLastScreenX = e.offsetX; lassoLastScreenY = e.offsetY;
         } else if (currentBrush.isShape) {
             shapeStartX = world.x; shapeStartY = world.y;
             sctx.clearRect(0, 0, strokeCanvas.width, strokeCanvas.height);
@@ -4059,7 +4235,14 @@ function handlePointerMove(e) {
     else if (currentTool === 'pincel') {
         const [cX, cY] = [world.x, world.y];
         if (currentBrush.isLasso) {
-            lassoPath.push({ x: world.x, y: world.y });
+            // Solo añade punto si el cursor se movió al menos 2px en pantalla (filtra micro-temblores)
+            const dxScr = e.offsetX - (lassoLastScreenX ?? e.offsetX);
+            const dyScr = e.offsetY - (lassoLastScreenY ?? e.offsetY);
+            if (dxScr * dxScr + dyScr * dyScr >= 4) {
+                lassoPath.push({ x: world.x, y: world.y });
+                lassoLastScreenX = e.offsetX;
+                lassoLastScreenY = e.offsetY;
+            }
         } else if (currentBrush.isShape) {
             // Live preview: clear strokeCanvas and redraw shape from anchor to cursor
             let ex = cX, ey = cY;
@@ -4245,14 +4428,37 @@ function handlePointerUp(e) {
 // ─────────────────────────────────────────────────────────────
 //  BRUSH DRAWING
 // ─────────────────────────────────────────────────────────────
+// Gaussian smoothing: promedia cada punto con sus vecinos
+// (Elimina temblor de alta frecuencia sin dejar lados rectos)
+function smoothLassoPath(pts, passes) {
+    if (pts.length <= 3) return pts;
+    let p = pts;
+    for (let iter = 0; iter < passes; iter++) {
+        const s = [p[0]]; // preservar primer punto
+        for (let i = 1; i < p.length - 1; i++) {
+            s.push({
+                x: p[i - 1].x * 0.25 + p[i].x * 0.5 + p[i + 1].x * 0.25,
+                y: p[i - 1].y * 0.25 + p[i].y * 0.5 + p[i + 1].y * 0.25
+            });
+        }
+        s.push(p[p.length - 1]); // preservar último punto
+        p = s;
+    }
+    return p;
+}
+
 function executeLassoFill() {
     if (lassoPath.length < 3) return;
+    // Pasadas adaptativas: a menos zoom más suavizado para compensar el temblor amplificado
+    const passes = Math.round(Math.min(24, Math.max(1, 3 / viewScale)));
+    const smoothPath = smoothLassoPath(lassoPath, passes);
+    if (smoothPath.length < 3) return;
     const l = layers[selectedLayerIndex]; l.ctx.save();
     if (currentBrush.isEraser) l.ctx.globalCompositeOperation = 'destination-out';
     else if (l.alphaLocked) l.ctx.globalCompositeOperation = 'source-atop';
     l.ctx.globalAlpha = brushOpacity; l.ctx.fillStyle = selectedColor;
-    l.ctx.beginPath(); l.ctx.moveTo(lassoPath[0].x, lassoPath[0].y);
-    lassoPath.forEach(p => l.ctx.lineTo(p.x, p.y)); l.ctx.closePath(); l.ctx.fill(); l.ctx.restore();
+    l.ctx.beginPath(); l.ctx.moveTo(smoothPath[0].x, smoothPath[0].y);
+    smoothPath.forEach(p => l.ctx.lineTo(p.x, p.y)); l.ctx.closePath(); l.ctx.fill(); l.ctx.restore();
 }
 function drawPoint(x, y, pressure) {
     const size = baseBrushSize * (0.2 + pressure * 1.8); if (size <= 0) return;
@@ -4627,6 +4833,31 @@ function hexToRgba(hex, alpha) { const r = parseInt(hex.slice(1, 3), 16), g = pa
 // ─────────────────────────────────────────────────────────────
 //  RENDER LOOP
 // ─────────────────────────────────────────────────────────────
+function drawLayerContent(targetCtx, layerObj) {
+    targetCtx.drawImage(layerObj.canvas, 0, 0);
+    if (currentTool === 'modify-sel' && modSelInitialized && !isImportingNewImage) {
+        const tItem = modSelLayersData.find(x => x.layer === layerObj);
+        if (tItem) {
+            if (modSelPerspectiveMode && perspCorners) {
+                renderPerspectiveWarpPreview(targetCtx, tItem.canvas, perspCorners);
+            } else {
+                const b = modSelBounds;
+                const cx = b.x + b.w / 2;
+                const cy = b.y + b.h / 2;
+                targetCtx.save();
+                targetCtx.imageSmoothingEnabled = true;
+                targetCtx.imageSmoothingQuality = 'high';
+                targetCtx.translate(cx, cy);
+                targetCtx.rotate(modSelRotation);
+                targetCtx.scale(modSelFlipX, modSelFlipY);
+                targetCtx.translate(-cx, -cy);
+                targetCtx.drawImage(tItem.canvas, b.x, b.y, b.w, b.h);
+                targetCtx.restore();
+            }
+        }
+    }
+}
+
 function render() {
     renderRequested = false;
     ctx.clearRect(0, 0, canvas.width, canvas.height); ctx.save();
@@ -4681,14 +4912,40 @@ function render() {
                 continue;
             }
 
-            // ── Clipping mask group render ──
+            // Live stroke preview inside a clipping group
+            const actInGrp = group.findIndex(layer => layer === layers[selectedLayerIndex]);
+            const isPreviewing = isDrawing && currentBrush.useCompositing && !currentBrush.isLasso && !activeFilterType;
+
             gctx.clearRect(0, 0, paperWidth, paperHeight);
-            // Draw the base layer (group[0] = CAPA B) 
-            gctx.save();
-            gctx.globalAlpha = group[0].opacity;
-            gctx.globalCompositeOperation = group[0].blendMode;
-            gctx.drawImage(group[0].canvas, 0, 0);
-            gctx.restore();
+            
+            // Draw the base layer (group[0] = CAPA B)
+            if (actInGrp === 0 && isPreviewing) {
+                mctx.clearRect(0, 0, paperWidth, paperHeight);
+                mctx.globalCompositeOperation = 'source-over';
+                drawLayerContent(mctx, group[0]);
+                
+                mctx.save();
+                mctx.globalAlpha = brushOpacity;
+                if ((currentBrush.id === 'aero-duro' || currentBrush.id === 'aero-suave') && currentBlur > 0) {
+                    mctx.filter = `blur(${currentBlur}px)`;
+                }
+                if (group[0].alphaLocked) mctx.globalCompositeOperation = 'source-atop';
+                mctx.drawImage(strokeCanvas, 0, 0);
+                mctx.restore();
+                mctx.filter = 'none';
+
+                gctx.save();
+                gctx.globalAlpha = group[0].opacity;
+                gctx.globalCompositeOperation = group[0].blendMode;
+                gctx.drawImage(maskBuffer, 0, 0);
+                gctx.restore();
+            } else {
+                gctx.save();
+                gctx.globalAlpha = group[0].opacity;
+                gctx.globalCompositeOperation = group[0].blendMode;
+                drawLayerContent(gctx, group[0]);
+                gctx.restore();
+            }
 
             // For each clipping layer
             for (let k = 1; k < group.length; k++) {
@@ -4696,44 +4953,28 @@ function render() {
                 mctx.globalCompositeOperation = 'source-over';
                 mctx.save();
                 mctx.globalAlpha = group[k].opacity;
-                mctx.drawImage(group[k].canvas, 0, 0);
+                drawLayerContent(mctx, group[k]);
                 mctx.restore();
 
+                if (actInGrp === k && isPreviewing) {
+                    mctx.save();
+                    mctx.globalAlpha = brushOpacity;
+                    if ((currentBrush.id === 'aero-duro' || currentBrush.id === 'aero-suave') && currentBlur > 0) {
+                        mctx.filter = `blur(${currentBlur}px)`;
+                    }
+                    if (group[k].alphaLocked) mctx.globalCompositeOperation = 'source-atop';
+                    mctx.drawImage(strokeCanvas, 0, 0);
+                    mctx.restore();
+                    mctx.filter = 'none';
+                }
+
                 mctx.globalCompositeOperation = 'destination-in';
-                mctx.drawImage(group[0].canvas, 0, 0);
+                // Use the composite of base layer + transform for clipping mask
+                drawLayerContent(mctx, group[0]);
                 mctx.globalCompositeOperation = 'source-over'; // reset
 
                 gctx.save();
                 gctx.globalCompositeOperation = group[k].blendMode;
-                gctx.drawImage(maskBuffer, 0, 0);
-                gctx.restore();
-            }
-
-            // Live stroke preview inside a clipping group
-            const actInGrp = group.findIndex(layer => layer === layers[selectedLayerIndex]);
-            if (actInGrp !== -1 && isDrawing && currentBrush.useCompositing && !currentBrush.isLasso && !activeFilterType) {
-                mctx.clearRect(0, 0, paperWidth, paperHeight);
-                mctx.globalCompositeOperation = 'source-over';
-                mctx.save();
-                mctx.globalAlpha = brushOpacity;
-                if ((currentBrush.id === 'aero-duro' || currentBrush.id === 'aero-suave') && currentBlur > 0) {
-                    mctx.filter = `blur(${currentBlur}px)`;
-                }
-                mctx.drawImage(strokeCanvas, 0, 0);
-                mctx.restore();
-                mctx.filter = 'none';
-
-                if (actInGrp > 0) {
-                    mctx.globalCompositeOperation = 'destination-in';
-                    mctx.drawImage(group[0].canvas, 0, 0);
-                    mctx.globalCompositeOperation = 'source-over';
-                } else if (layers[selectedLayerIndex].alphaLocked) {
-                    mctx.globalCompositeOperation = 'destination-in';
-                    mctx.drawImage(layers[selectedLayerIndex].canvas, 0, 0);
-                    mctx.globalCompositeOperation = 'source-over';
-                }
-                gctx.save();
-                gctx.globalCompositeOperation = layers[selectedLayerIndex].blendMode;
                 gctx.drawImage(maskBuffer, 0, 0);
                 gctx.restore();
             }
@@ -4746,25 +4987,25 @@ function render() {
                 ctx.save();
                 ctx.globalAlpha = l.opacity;
                 ctx.globalCompositeOperation = l.blendMode;
-                ctx.drawImage(l.canvas, 0, 0);
 
                 if (i === selectedLayerIndex && isDrawing && currentBrush.useCompositing && !currentBrush.isLasso && !activeFilterType) {
                     mctx.clearRect(0, 0, paperWidth, paperHeight);
                     mctx.globalCompositeOperation = 'source-over';
+                    drawLayerContent(mctx, l);
+
                     mctx.save();
                     mctx.globalAlpha = brushOpacity;
                     if ((currentBrush.id === 'aero-duro' || currentBrush.id === 'aero-suave') && currentBlur > 0) {
                         mctx.filter = `blur(${currentBlur}px)`;
                     }
+                    if (l.alphaLocked) mctx.globalCompositeOperation = 'source-atop';
                     mctx.drawImage(strokeCanvas, 0, 0);
                     mctx.restore();
                     mctx.filter = 'none';
-                    if (l.alphaLocked) {
-                        mctx.globalCompositeOperation = 'destination-in';
-                        mctx.drawImage(l.canvas, 0, 0);
-                        mctx.globalCompositeOperation = 'source-over';
-                    }
+
                     ctx.drawImage(maskBuffer, 0, 0);
+                } else {
+                    drawLayerContent(ctx, l);
                 }
                 ctx.restore();
             }
@@ -4783,7 +5024,9 @@ function render() {
 
         if (modSelPerspectiveMode && perspCorners) {
             // ── Perspective warp preview using scanline rendering ──
-            renderPerspectiveWarpPreview(ctx, modSelCanvas, perspCorners);
+            if (isImportingNewImage) {
+                renderPerspectiveWarpPreview(ctx, modSelCanvas, perspCorners);
+            }
 
             // Draw the quadrilateral outline
             ctx.restore();
@@ -4810,11 +5053,13 @@ function render() {
             const b = modSelBounds;
             const cx = b.x + b.w / 2;
             const cy = b.y + b.h / 2;
-            ctx.translate(cx, cy);
-            ctx.rotate(modSelRotation);
-            ctx.scale(modSelFlipX, modSelFlipY);
-            ctx.translate(-cx, -cy);
-            ctx.drawImage(modSelCanvas, b.x, b.y, b.w, b.h);
+            if (isImportingNewImage) {
+                ctx.translate(cx, cy);
+                ctx.rotate(modSelRotation);
+                ctx.scale(modSelFlipX, modSelFlipY);
+                ctx.translate(-cx, -cy);
+                ctx.drawImage(modSelCanvas, b.x, b.y, b.w, b.h);
+            }
             ctx.strokeStyle = '#ff00ff'; ctx.lineWidth = 2 / viewScale; ctx.setLineDash([]);
             ctx.strokeRect(b.x, b.y, b.w, b.h);
             ctx.restore();
@@ -5159,6 +5404,21 @@ function handleGlobalShortcuts(e) {
 
     // Allow Zoom and Pan shortcuts during filters
     if (activeFilterType) {
+        if (activeFilterType === 'levels' && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
+            const channels = ['rgb', 'r', 'g', 'b'];
+            let idx = channels.indexOf(activeCurveChannel);
+            if (e.key === 'ArrowUp') idx = (idx - 1 + channels.length) % channels.length;
+            else idx = (idx + 1) % channels.length;
+            
+            const select = document.getElementById('curveChannelSelect');
+            if (select) {
+                select.value = channels[idx];
+                select.dispatchEvent(new Event('change'));
+            }
+            e.preventDefault();
+            return;
+        }
+
         const qS = brushTypesData.find(b => b.id === 'lazo-relleno')?.shortcut || 'q';
         const sS = brushTypesData.find(b => b.id === 'borrador')?.shortcut || 's';
         const wS = brushTypesData.find(b => b.id === 'lazo-borrador')?.shortcut || 'w';
