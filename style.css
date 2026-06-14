@@ -87,6 +87,123 @@ html {
     flex-direction: column;
     align-items: center;
     margin-bottom: 10px;
+    position: relative;
+}
+
+/* Wrapper that holds slider + tab side by side */
+.size-slider-wrapper {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    position: relative;
+    /* overflow visible so the absolutely-positioned tab can peek out */
+}
+
+/* The thin tab button — positioned absolutely on the right edge of the slider */
+.size-preset-tab {
+    position: absolute;
+    right: 0;
+    /* flush with right edge, fully inside */
+    top: 50%;
+    transform: translateY(-50%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 15px;
+    height: 120px;
+    background: rgba(120, 120, 140, 0.28);
+    border-radius: 0 6px 6px 0;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-left: none;
+    cursor: pointer;
+    color: rgba(200, 200, 220, 0.75);
+    transition: background 0.2s, color 0.2s;
+    z-index: 10;
+}
+
+.size-preset-tab:hover {
+    background: rgba(160, 160, 200, 0.42);
+    color: #fff;
+}
+
+/* Floating popup */
+.size-preset-popup {
+    position: absolute;
+    left: calc(100% + 2px);
+    /* right of the wrapper (tab is inside it) */
+    top: 50%;
+    transform: translateY(-50%);
+    z-index: 2000;
+    background: rgba(28, 28, 38, 0.96);
+    backdrop-filter: blur(18px);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 14px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.45);
+    padding: 12px 10px 10px 12px;
+    width: 220px;
+    pointer-events: all;
+}
+
+.size-preset-popup::before {
+    content: '';
+    position: absolute;
+    left: -7px;
+    top: 50%;
+    transform: translateY(-50%) rotate(45deg);
+    width: 13px;
+    height: 13px;
+    background: rgba(28, 28, 38, 0.96);
+    border-left: 1px solid rgba(255, 255, 255, 0.12);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.size-preset-title {
+    font-size: 10px;
+    font-weight: 700;
+    color: rgba(180, 180, 210, 0.7);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    text-align: center;
+    margin-bottom: 10px;
+}
+
+.size-preset-grid {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 4px 2px;
+}
+
+.size-preset-btn {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    padding: 4px 2px;
+    border-radius: 8px;
+    transition: background 0.15s;
+}
+
+.size-preset-btn:hover {
+    background: rgba(255, 255, 255, 0.10);
+}
+
+.size-preset-btn.active-size {
+    background: rgba(100, 140, 255, 0.20);
+}
+
+.size-preset-btn canvas {
+    display: block;
+}
+
+.size-preset-btn span {
+    font-size: 9px;
+    color: rgba(200, 200, 220, 0.75);
+    font-weight: 600;
+    min-width: 0;
+    text-align: center;
 }
 
 .slider-container.vertical {
@@ -233,10 +350,7 @@ body:not(.theme-classic) .tool-btn img {
 }
 
 /* ===== STABILIZER FLOATING SLIDER ===== */
-#stabilizer-container {
-    position: absolute;
-    bottom: 20px;
-    left: 20px;
+.floating-slider-panel {
     padding: 8px 14px 10px;
     background: rgba(255, 255, 255, 0.35);
     backdrop-filter: blur(4px);
@@ -246,13 +360,12 @@ body:not(.theme-classic) .tool-btn img {
     flex-direction: column;
     align-items: center;
     gap: 5px;
-    z-index: 101;
     box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
-    min-width: 160px;
+    min-width: 140px;
     pointer-events: auto;
 }
 
-#stabilizer-header {
+.floating-slider-header {
     display: flex;
     justify-content: space-between;
     width: 100%;
@@ -263,13 +376,13 @@ body:not(.theme-classic) .tool-btn img {
     gap: 10px;
 }
 
-#stabilizer-value {
+.floating-slider-value {
     min-width: 22px;
     text-align: right;
     font-size: 10px;
 }
 
-#stabilizer-slider {
+.floating-slider {
     -webkit-appearance: none;
     appearance: none;
     width: 100%;
@@ -280,7 +393,7 @@ body:not(.theme-classic) .tool-btn img {
     cursor: pointer;
 }
 
-#stabilizer-slider::-webkit-slider-thumb {
+.floating-slider::-webkit-slider-thumb {
     -webkit-appearance: none;
     appearance: none;
     width: 18px;
@@ -291,11 +404,11 @@ body:not(.theme-classic) .tool-btn img {
     transition: transform 0.1s ease;
 }
 
-#stabilizer-slider::-webkit-slider-thumb:hover {
+.floating-slider::-webkit-slider-thumb:hover {
     transform: scale(1.2);
 }
 
-#stabilizer-slider::-moz-range-thumb {
+.floating-slider::-moz-range-thumb {
     width: 18px;
     height: 18px;
     background: #666;
@@ -524,13 +637,13 @@ body:not(.theme-classic) .tool-btn img {
     justify-content: space-between;
     align-items: center;
     padding: 10px 5px;
-    border-bottom: 1px solid rgba(255,255,255,0.07);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.07);
     cursor: pointer;
     transition: background 0.2s;
 }
 
 .tool-item:hover {
-    background: rgba(255,255,255,0.08);
+    background: rgba(255, 255, 255, 0.08);
     border-radius: 6px;
 }
 
@@ -807,6 +920,7 @@ body:not(.theme-classic) .tool-btn img {
     text-align: center;
     text-transform: uppercase;
 }
+
 .layer-blend-select:hover {
     border-color: #f4ff61;
 }

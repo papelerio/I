@@ -228,7 +228,11 @@ let isDrawing = false; let lastX = 0; let lastY = 0; let lastPressure = 0.5; let
 let rotationPivot = null;
 
 // Stabilizer state
-let stabEnabled = 0;
+let stabEnabled = 3;
+let pressureSensitivity = 0.8;
+let stabMode = 'post';
+let rawStrokePath = [];
+let isPostStrokePreview = false;
 let stabPoints = [];
 let stabOutX = null, stabOutY = null, stabOutP = null;
 let isSpacePressed = false;
@@ -697,17 +701,184 @@ function init() {
         }
     };
 
-    sizeSlider.oninput = (e) => { baseBrushSize = e.target.value | 0; sizeValue.textContent = baseBrushSize; currentBrush.size = baseBrushSize; requestRender(); };
+    sizeSlider.oninput = (e) => { baseBrushSize = parseFloat(e.target.value); sizeValue.textContent = baseBrushSize < 10 ? baseBrushSize.toFixed(1) : Math.round(baseBrushSize); currentBrush.size = baseBrushSize; requestRender(); };
     sizeSlider.onpointerup = (e) => e.target.blur();
+
+    // ── Size Preset Popup ──────────────────────────────────────
+    (function initSizePresets() {
+        const PRESETS = [0.1, 0.3, 0.5, 0.7, 1, 2, 3, 5, 7, 9, 12, 16, 20, 25, 30, 40, 50, 60, 75, 100];
+        const tab     = document.getElementById('size-preset-tab');
+        const popup   = document.getElementById('size-preset-popup');
+        const grid    = document.getElementById('size-preset-grid');
+        if (!tab || !popup || !grid) return;
+
+        // Build circles
+        function drawCircle(sz) {
+            const MAX_R = 16;
+            const canvasSize = MAX_R * 2 + 2;
+            const c = document.createElement('canvas');
+            c.width = canvasSize; c.height = canvasSize;
+            const cx = c.getContext('2d');
+            const r = Math.min(MAX_R, Math.max(0.8, sz * 0.32));
+            cx.beginPath();
+            cx.arc(canvasSize / 2, canvasSize / 2, r, 0, Math.PI * 2);
+            cx.fillStyle = 'rgba(210,210,230,0.85)';
+            cx.fill();
+            return c;
+        }
+
+        function refreshActive() {
+            grid.querySelectorAll('.size-preset-btn').forEach(btn => {
+                btn.classList.toggle('active-size', parseFloat(btn.dataset.size) === baseBrushSize);
+            });
+        }
+
+        PRESETS.forEach(sz => {
+            const btn = document.createElement('button');
+            btn.className = 'size-preset-btn';
+            btn.dataset.size = sz;
+            btn.appendChild(drawCircle(sz));
+            const label = document.createElement('span');
+            label.textContent = sz + ' px';
+            btn.appendChild(label);
+            btn.addEventListener('pointerdown', e => {
+                e.stopPropagation();
+                baseBrushSize = sz;
+                sizeSlider.value = sz;
+                sizeValue.textContent = sz < 10 ? sz.toFixed(1) : sz;
+                currentBrush.size = sz;
+                requestRender();
+                refreshActive();
+            });
+            grid.appendChild(btn);
+        });
+
+        // Hover logic with a small delay so it doesn't flash
+        let hideTimer = null;
+        function showPopup() {
+            clearTimeout(hideTimer);
+            popup.classList.remove('hidden');
+            refreshActive();
+        }
+        function hidePopup() {
+            hideTimer = setTimeout(() => popup.classList.add('hidden'), 180);
+        }
+
+        tab.addEventListener('pointerenter', showPopup);
+        tab.addEventListener('pointerleave', hidePopup);
+        popup.addEventListener('pointerenter', () => clearTimeout(hideTimer));
+        popup.addEventListener('pointerleave', hidePopup);
+    })();
+    // ──────────────────────────────────────────────────────────
 
     opacitySlider.oninput = (e) => { brushOpacity = e.target.value / 100; opacityValue.textContent = e.target.value + '%'; currentBrush.opacity = brushOpacity; if (eyeIcon) eyeIcon.src = (e.target.value | 0) === 0 ? 'simbolo ojo cerrado.png' : 'simbolo ojo abierto.png'; requestRender(); };
     opacitySlider.onpointerup = (e) => e.target.blur();
 
+    // ── Opacity Preset Popup ───────────────────────────────────
+    (function initOpacityPresets() {
+        const PRESETS = [5,10,15,20,25,30,35,40,45,50,55,60,65,70,75,80,85,90,95,100];
+        const tab   = document.getElementById('opacity-preset-tab');
+        const popup = document.getElementById('opacity-preset-popup');
+        const grid  = document.getElementById('opacity-preset-grid');
+        if (!tab || !popup || !grid) return;
+
+        // Draw a small circle with a checkerboard behind + fill at the given opacity
+        function drawOpacityCircle(pct) {
+            const SIZE = 34; const R = 13;
+            const c = document.createElement('canvas');
+            c.width = SIZE; c.height = SIZE;
+            const cx = c.getContext('2d');
+            const cx2 = SIZE / 2, cy2 = SIZE / 2;
+
+            // Checkerboard pattern (shows through the transparent areas)
+            const sq = 4;
+            for (let row = 0; row < SIZE / sq; row++) {
+                for (let col = 0; col < SIZE / sq; col++) {
+                    cx.fillStyle = (row + col) % 2 === 0 ? '#555' : '#333';
+                    cx.fillRect(col * sq, row * sq, sq, sq);
+                }
+            }
+            // Clip to circle and draw the colour fill at given opacity
+            cx.save();
+            cx.beginPath(); cx.arc(cx2, cy2, R, 0, Math.PI * 2); cx.clip();
+            cx.clearRect(0, 0, SIZE, SIZE);
+            // Re-draw checker inside clip
+            for (let row = 0; row < SIZE / sq; row++) {
+                for (let col = 0; col < SIZE / sq; col++) {
+                    cx.fillStyle = (row + col) % 2 === 0 ? '#555' : '#333';
+                    cx.fillRect(col * sq, row * sq, sq, sq);
+                }
+            }
+            cx.globalAlpha = pct / 100;
+            cx.fillStyle = 'rgba(210,210,230,1)';
+            cx.fillRect(0, 0, SIZE, SIZE);
+            cx.restore();
+            // Circle border
+            cx.beginPath(); cx.arc(cx2, cy2, R, 0, Math.PI * 2);
+            cx.strokeStyle = 'rgba(255,255,255,0.18)'; cx.lineWidth = 1; cx.stroke();
+            return c;
+        }
+
+        function refreshActive() {
+            const cur = Math.round(brushOpacity * 100);
+            grid.querySelectorAll('.size-preset-btn').forEach(btn => {
+                btn.classList.toggle('active-size', parseInt(btn.dataset.opacity) === cur);
+            });
+        }
+
+        PRESETS.forEach(pct => {
+            const btn = document.createElement('button');
+            btn.className = 'size-preset-btn';
+            btn.dataset.opacity = pct;
+            btn.appendChild(drawOpacityCircle(pct));
+            const label = document.createElement('span');
+            label.textContent = pct + '%';
+            btn.appendChild(label);
+            btn.addEventListener('pointerdown', e => {
+                e.stopPropagation();
+                brushOpacity = pct / 100;
+                opacitySlider.value = pct;
+                opacityValue.textContent = pct + '%';
+                currentBrush.opacity = brushOpacity;
+                if (eyeIcon) eyeIcon.src = pct === 0 ? 'simbolo ojo cerrado.png' : 'simbolo ojo abierto.png';
+                requestRender();
+                refreshActive();
+            });
+            grid.appendChild(btn);
+        });
+
+        let hideTimer = null;
+        function showPopup() { clearTimeout(hideTimer); popup.classList.remove('hidden'); refreshActive(); }
+        function hidePopup() { hideTimer = setTimeout(() => popup.classList.add('hidden'), 180); }
+
+        tab.addEventListener('pointerenter', showPopup);
+        tab.addEventListener('pointerleave', hidePopup);
+        popup.addEventListener('pointerenter', () => clearTimeout(hideTimer));
+        popup.addEventListener('pointerleave', hidePopup);
+    })();
+    // ──────────────────────────────────────────────────────────
+
     blurSlider.oninput = (e) => { currentBlur = e.target.value | 0; blurValueLabel.textContent = currentBlur; currentBrush.blur = currentBlur; updateTintedTexture(); };
     blurSlider.onpointerup = (e) => e.target.blur();
 
+    const stabModeSelect = document.getElementById('stab-mode-select');
+    if (stabModeSelect) {
+        stabModeSelect.onchange = (e) => { stabMode = e.target.value; };
+        stabModeSelect.value = stabMode;
+    }
+
     stabilizerSlider.oninput = (e) => { stabEnabled = e.target.value | 0; stabilizerValue.textContent = stabEnabled; };
     stabilizerSlider.onpointerup = (e) => e.target.blur();
+
+    const pressureSlider = document.getElementById('pressure-slider');
+    const pressureValueLabel = document.getElementById('pressure-value');
+    if (pressureSlider) {
+        pressureSlider.oninput = (e) => {
+            pressureSensitivity = parseInt(e.target.value) / 100;
+            pressureValueLabel.textContent = e.target.value + '%';
+        };
+        pressureSlider.onpointerup = (e) => e.target.blur();
+    }
 
     resetRotationBtn.onclick = resetRotation;
     function handleKeyDown(e) {
@@ -4096,7 +4267,12 @@ function handlePointerDown(e) {
             shapeStartX = world.x; shapeStartY = world.y;
             sctx.clearRect(0, 0, strokeCanvas.width, strokeCanvas.height);
         } else {
-            if (stabEnabled > 0) {
+            if (stabEnabled > 0 && stabMode === 'post' && !currentBrush.isLasso && !currentBrush.isShape && currentBrush.id !== 'push-brush' && !activeFilterType) {
+                isPostStrokePreview = true;
+                rawStrokePath = [{ x: lastX, y: lastY, p: smoothedPressure }];
+            }
+
+            if (stabEnabled > 0 && stabMode === 'realtime') {
                 stabPoints = [];
                 stabOutX = null; stabOutY = null; stabOutP = null;
                 stabPoints.push({ x: lastX, y: lastY, p: smoothedPressure });
@@ -4251,7 +4427,7 @@ function handlePointerMove(e) {
             drawShapeOnCtx(sctx, shapeStartX, shapeStartY, ex, ey);
         } else {
             smoothedPressure += ((e.pressure || 0.1) - smoothedPressure) * 0.3;
-            if (stabEnabled > 0) {
+            if (stabEnabled > 0 && stabMode === 'realtime') {
                 const sp = stabilizePoint(cX, cY, smoothedPressure, stabEnabled);
                 lastX = cX; lastY = cY; lastPressure = smoothedPressure;
                 if (sp) {
@@ -4263,8 +4439,10 @@ function handlePointerMove(e) {
                     stabOutX = sp.x; stabOutY = sp.y; stabOutP = sp.p;
                 }
             } else {
-                const dist = Math.hypot(cX - lastX, cY - lastY); const step = Math.max(0.2, baseBrushSize * 0.5 * brushSpacing); const steps = Math.floor(dist / step);
-                for (let i = 0; i <= steps; i++) { const t = steps === 0 ? 1 : i / steps; drawPoint(lastX + (cX - lastX) * t, lastY + (cY - lastY) * t, lastPressure + (smoothedPressure - lastPressure) * t); }
+                if (stabEnabled > 0 && stabMode === 'post') {
+                    rawStrokePath.push({ x: cX, y: cY, p: smoothedPressure });
+                }
+                drawStabLineTo(lastX, lastY, lastPressure, cX, cY, smoothedPressure);
                 [lastX, lastY, lastPressure] = [cX, cY, smoothedPressure];
             }
         }
@@ -4313,12 +4491,28 @@ function handlePointerUp(e) {
         pushHistory(); // snapshot AFTER move/resize is settled
     }
     else if (currentTool === 'pincel') {
-        if (stabEnabled > 0 && !currentBrush.isLasso && !currentBrush.isShape && !currentBrush.useCompositing) {
+        if (stabEnabled > 0 && stabMode === 'realtime' && !currentBrush.isLasso && !currentBrush.isShape && !currentBrush.useCompositing) {
             while (stabPoints.length > 0) {
                 const p = stabPoints.shift();
                 drawPoint(p.x, p.y, p.p);
             }
             stabPoints = [];
+        }
+
+        if (stabMode === 'post' && stabEnabled > 0 && rawStrokePath.length > 2 && isPostStrokePreview) {
+            sctx.clearRect(0, 0, strokeCanvas.width, strokeCanvas.height);
+            isPostStrokePreview = false;
+            
+            const passes = Math.round(stabEnabled * 2);
+            const smoothed = smoothStrokePath(rawStrokePath, passes);
+            
+            drawPoint(smoothed[0].x, smoothed[0].y, smoothed[0].p);
+            for (let i = 1; i < smoothed.length; i++) {
+                drawStabLineTo(smoothed[i-1].x, smoothed[i-1].y, smoothed[i-1].p, smoothed[i].x, smoothed[i].y, smoothed[i].p);
+            }
+            rawStrokePath = [];
+        } else {
+            isPostStrokePreview = false;
         }
         if (currentBrush.isLasso) {
             executeLassoFill();
@@ -4447,6 +4641,24 @@ function smoothLassoPath(pts, passes) {
     return p;
 }
 
+function smoothStrokePath(pts, passes) {
+    if (pts.length <= 3) return pts;
+    let p = pts;
+    for (let iter = 0; iter < passes; iter++) {
+        const s = [p[0]]; // preservar primer punto
+        for (let i = 1; i < p.length - 1; i++) {
+            s.push({
+                x: p[i - 1].x * 0.25 + p[i].x * 0.5 + p[i + 1].x * 0.25,
+                y: p[i - 1].y * 0.25 + p[i].y * 0.5 + p[i + 1].y * 0.25,
+                p: p[i - 1].p * 0.25 + p[i].p * 0.5 + p[i + 1].p * 0.25
+            });
+        }
+        s.push(p[p.length - 1]); // preservar último punto
+        p = s;
+    }
+    return p;
+}
+
 function executeLassoFill() {
     if (lassoPath.length < 3) return;
     // Pasadas adaptativas: a menos zoom más suavizado para compensar el temblor amplificado
@@ -4461,7 +4673,10 @@ function executeLassoFill() {
     smoothPath.forEach(p => l.ctx.lineTo(p.x, p.y)); l.ctx.closePath(); l.ctx.fill(); l.ctx.restore();
 }
 function drawPoint(x, y, pressure) {
-    const size = baseBrushSize * (0.2 + pressure * 1.8); if (size <= 0) return;
+    const minScale = 1.0 - (0.8 * pressureSensitivity);
+    const maxScale = 1.0 + (1.0 * pressureSensitivity);
+    const size = baseBrushSize * (minScale + pressure * (maxScale - minScale)); 
+    if (size <= 0) return;
     const l = layers[selectedLayerIndex];
 
     if (currentBrush.isBlur) {
@@ -4605,8 +4820,31 @@ function drawPoint(x, y, pressure) {
 
         l.ctx.restore();
     }
-    else if (currentBrush.useCompositing) { sctx.save(); if (currentBrush.isEraser) sctx.globalCompositeOperation = 'destination-out'; renderStamp(sctx, x, y, size, 1.0); sctx.restore(); }
-    else { l.ctx.save(); if (currentBrush.isEraser) l.ctx.globalCompositeOperation = 'destination-out'; else if (l.alphaLocked) l.ctx.globalCompositeOperation = 'source-atop'; renderStamp(l.ctx, x, y, size, brushOpacity * 0.4); l.ctx.restore(); }
+    else {
+        const isHardSolid = !currentBrush.useTexture && !currentBrush.isBlur && !currentBrush.isSmudge && currentBrush.hardness >= 0.8 && !currentBrush.isLasso && !currentBrush.isShape;
+        if (isHardSolid) {
+            const ctx = (currentBrush.useCompositing || isPostStrokePreview) ? sctx : l.ctx;
+            ctx.save();
+            if (currentBrush.isEraser && !currentBrush.useCompositing && !isPostStrokePreview) ctx.globalCompositeOperation = 'destination-out';
+            else if (!currentBrush.useCompositing && l.alphaLocked && !isPostStrokePreview) ctx.globalCompositeOperation = 'source-atop';
+            if (!currentBrush.useCompositing) ctx.globalAlpha = brushOpacity;
+            else ctx.globalAlpha = 1.0;
+            ctx.fillStyle = selectedColor;
+            ctx.beginPath();
+            ctx.arc(x, y, size, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.restore();
+        }
+        else if (currentBrush.useCompositing) { sctx.save(); renderStamp(sctx, x, y, size, 1.0); sctx.restore(); }
+        else { 
+            const ctx = isPostStrokePreview ? sctx : l.ctx;
+            ctx.save(); 
+            if (currentBrush.isEraser && !currentBrush.useCompositing && !isPostStrokePreview) ctx.globalCompositeOperation = 'destination-out'; 
+            else if (l.alphaLocked && !isPostStrokePreview) ctx.globalCompositeOperation = 'source-atop'; 
+            renderStamp(ctx, x, y, size, brushOpacity * 0.4); 
+            ctx.restore(); 
+        }
+    }
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -4817,6 +5055,37 @@ function stabilizePoint(x, y, p, strength) {
 }
 
 function drawStabLineTo(sx, sy, sp, ex, ey, ep) {
+    const isHardSolid = !currentBrush.useTexture && !currentBrush.isBlur && !currentBrush.isSmudge && currentBrush.hardness >= 0.8 && !currentBrush.isLasso && !currentBrush.isShape;
+    
+    if (isHardSolid) {
+        const avgPressure = (sp + ep) / 2;
+        const minScale = 1.0 - (0.8 * pressureSensitivity);
+        const maxScale = 1.0 + (1.0 * pressureSensitivity);
+        const size = baseBrushSize * (minScale + avgPressure * (maxScale - minScale));
+        if (size <= 0) return;
+        const l = layers[selectedLayerIndex];
+        const ctx = (currentBrush.useCompositing || isPostStrokePreview) ? sctx : l.ctx;
+        
+        ctx.save();
+        if (currentBrush.isEraser && !currentBrush.useCompositing && !isPostStrokePreview) ctx.globalCompositeOperation = 'destination-out';
+        else if (!currentBrush.useCompositing && l.alphaLocked && !isPostStrokePreview) ctx.globalCompositeOperation = 'source-atop';
+        
+        if (!currentBrush.useCompositing) ctx.globalAlpha = brushOpacity;
+        else ctx.globalAlpha = 1.0;
+        
+        ctx.strokeStyle = selectedColor;
+        ctx.lineWidth = size * 2;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        
+        ctx.beginPath();
+        ctx.moveTo(sx, sy);
+        ctx.lineTo(ex, ey);
+        ctx.stroke();
+        ctx.restore();
+        return;
+    }
+
     const dist = Math.hypot(ex - sx, ey - sy);
     const step = Math.max(0.2, baseBrushSize * 0.5 * brushSpacing);
     const steps = Math.floor(dist / step);
@@ -4860,6 +5129,7 @@ function drawLayerContent(targetCtx, layerObj) {
 
 function render() {
     renderRequested = false;
+    const isPreviewing = isDrawing && (currentBrush.useCompositing || isPostStrokePreview) && !currentBrush.isLasso && !activeFilterType;
     ctx.clearRect(0, 0, canvas.width, canvas.height); ctx.save();
     ctx.translate(canvas.width / 2 + viewPosX, canvas.height / 2 + viewPosY);
     ctx.rotate(viewRotation); ctx.scale(viewScale, viewScale);
@@ -4914,7 +5184,6 @@ function render() {
 
             // Live stroke preview inside a clipping group
             const actInGrp = group.findIndex(layer => layer === layers[selectedLayerIndex]);
-            const isPreviewing = isDrawing && currentBrush.useCompositing && !currentBrush.isLasso && !activeFilterType;
 
             gctx.clearRect(0, 0, paperWidth, paperHeight);
             
@@ -4925,11 +5194,12 @@ function render() {
                 drawLayerContent(mctx, group[0]);
                 
                 mctx.save();
-                mctx.globalAlpha = brushOpacity;
+                mctx.globalAlpha = currentBrush.useCompositing ? brushOpacity : 1.0;
                 if ((currentBrush.id === 'aero-duro' || currentBrush.id === 'aero-suave') && currentBlur > 0) {
                     mctx.filter = `blur(${currentBlur}px)`;
                 }
                 if (group[0].alphaLocked) mctx.globalCompositeOperation = 'source-atop';
+                if (currentBrush.isEraser) mctx.globalCompositeOperation = 'destination-out';
                 mctx.drawImage(strokeCanvas, 0, 0);
                 mctx.restore();
                 mctx.filter = 'none';
@@ -4958,11 +5228,12 @@ function render() {
 
                 if (actInGrp === k && isPreviewing) {
                     mctx.save();
-                    mctx.globalAlpha = brushOpacity;
+                    mctx.globalAlpha = currentBrush.useCompositing ? brushOpacity : 1.0;
                     if ((currentBrush.id === 'aero-duro' || currentBrush.id === 'aero-suave') && currentBlur > 0) {
                         mctx.filter = `blur(${currentBlur}px)`;
                     }
                     if (group[k].alphaLocked) mctx.globalCompositeOperation = 'source-atop';
+                    if (currentBrush.isEraser) mctx.globalCompositeOperation = 'destination-out';
                     mctx.drawImage(strokeCanvas, 0, 0);
                     mctx.restore();
                     mctx.filter = 'none';
@@ -4988,17 +5259,18 @@ function render() {
                 ctx.globalAlpha = l.opacity;
                 ctx.globalCompositeOperation = l.blendMode;
 
-                if (i === selectedLayerIndex && isDrawing && currentBrush.useCompositing && !currentBrush.isLasso && !activeFilterType) {
+                if (i === selectedLayerIndex && isPreviewing) {
                     mctx.clearRect(0, 0, paperWidth, paperHeight);
                     mctx.globalCompositeOperation = 'source-over';
                     drawLayerContent(mctx, l);
 
                     mctx.save();
-                    mctx.globalAlpha = brushOpacity;
+                    mctx.globalAlpha = currentBrush.useCompositing ? brushOpacity : 1.0;
                     if ((currentBrush.id === 'aero-duro' || currentBrush.id === 'aero-suave') && currentBlur > 0) {
                         mctx.filter = `blur(${currentBlur}px)`;
                     }
                     if (l.alphaLocked) mctx.globalCompositeOperation = 'source-atop';
+                    if (currentBrush.isEraser) mctx.globalCompositeOperation = 'destination-out';
                     mctx.drawImage(strokeCanvas, 0, 0);
                     mctx.restore();
                     mctx.filter = 'none';
@@ -5260,12 +5532,12 @@ function syncBrushUI() {
         sizeSlider.min = 0;
         sizeSlider.max = 30;
     } else {
-        sizeSlider.min = 1;
+        sizeSlider.min = 0.1;
         sizeSlider.max = 100;
     }
 
     sizeSlider.value = baseBrushSize;
-    sizeValue.textContent = baseBrushSize;
+    sizeValue.textContent = baseBrushSize < 10 ? baseBrushSize.toFixed(1) : Math.round(baseBrushSize);
 
     const opPct = Math.round(brushOpacity * 100);
     opacitySlider.value = opPct;

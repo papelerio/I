@@ -109,18 +109,44 @@
                 </button>
 
                 <div class="opacity-settings">
-                    <div class="slider-container vertical tertiary">
-                        <img src="simbolo ojo abierto.png" class="mini-icon" id="eye-icon">
-                        <span id="opacity-value">100%</span>
-                        <input type="range" id="brush-opacity" min="1" max="100" value="100" orient="vertical">
+                    <div class="size-slider-wrapper">
+                        <div class="slider-container vertical tertiary">
+                            <img src="simbolo ojo abierto.png" class="mini-icon" id="eye-icon">
+                            <span id="opacity-value">100%</span>
+                            <input type="range" id="brush-opacity" min="1" max="100" value="100" orient="vertical">
+                        </div>
+                        <!-- Opacity preset tab -->
+                        <div class="size-preset-tab" id="opacity-preset-tab">
+                            <svg width="8" height="14" viewBox="0 0 8 14" fill="none">
+                                <path d="M1 1L7 7L1 13" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                            </svg>
+                        </div>
+                        <!-- Opacity preset popup -->
+                        <div class="size-preset-popup hidden" id="opacity-preset-popup">
+                            <div class="size-preset-title">Opacidad rápida</div>
+                            <div class="size-preset-grid" id="opacity-preset-grid"></div>
+                        </div>
                     </div>
                 </div>
                 <div class="spacer"></div>
                 <div class="brush-settings">
-                    <div class="slider-container vertical">
-                        <img src="simbolo de tamaño.png" class="mini-icon">
-                        <span id="size-value">12</span>
-                        <input type="range" id="brush-size" min="1" max="100" value="12" orient="vertical">
+                    <div class="size-slider-wrapper">
+                        <div class="slider-container vertical">
+                            <img src="simbolo de tamaño.png" class="mini-icon">
+                            <span id="size-value">12</span>
+                            <input type="range" id="brush-size" min="0.1" max="100" step="0.1" value="12" orient="vertical">
+                        </div>
+                        <!-- Size preset tab -->
+                        <div class="size-preset-tab" id="size-preset-tab">
+                            <svg width="8" height="14" viewBox="0 0 8 14" fill="none">
+                                <path d="M1 1L7 7L1 13" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                            </svg>
+                        </div>
+                        <!-- Size preset popup (inside wrapper = no dead zone) -->
+                        <div class="size-preset-popup hidden" id="size-preset-popup">
+                            <div class="size-preset-title">Tamaños rápidos</div>
+                            <div class="size-preset-grid" id="size-preset-grid"></div>
+                        </div>
                     </div>
                 </div>
 
@@ -363,12 +389,25 @@
 
                 <button id="reset-rotation-btn" class="hidden">Rotación original</button>
             </div>
-            <div id="stabilizer-container">
-                <div id="stabilizer-header">
-                    <span>Estabilizador</span>
-                    <span id="stabilizer-value">0</span>
+            <div id="bottom-sliders-wrapper" style="position: absolute; bottom: 20px; left: 20px; display: flex; gap: 15px; z-index: 101;">
+                <div class="floating-slider-panel">
+                    <div class="floating-slider-header">
+                        <select id="stab-mode-select" style="background: transparent; border: none; font-size: 10px; font-weight: bold; color: #444; outline: none; cursor: pointer; padding: 0; appearance: none; -webkit-appearance: none;">
+                            <option value="post">Estabilizador (Post)</option>
+                            <option value="realtime">Estabilizador (Vivo)</option>
+                        </select>
+                        <span id="stabilizer-value" class="floating-slider-value">3</span>
+                    </div>
+                    <input type="range" id="stabilizer-slider" class="floating-slider" min="0" max="15" value="3">
                 </div>
-                <input type="range" id="stabilizer-slider" min="0" max="15" value="0">
+                
+                <div class="floating-slider-panel">
+                    <div class="floating-slider-header">
+                        <span>Sensibilidad (Presión)</span>
+                        <span id="pressure-value" class="floating-slider-value">80%</span>
+                    </div>
+                    <input type="range" id="pressure-slider" class="floating-slider" min="0" max="100" value="80">
+                </div>
             </div>
             <div id="eyedropper-preview" class="hidden">
                 <div class="color-circle"></div>
