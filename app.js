@@ -230,6 +230,10 @@ let rotationPivot = null;
 // Stabilizer state
 let stabEnabled = 3;
 let pressureSensitivity = 0.8;
+let velocitySensitivity = 0.0;   // 0 = off, 1 = full
+let velocityMode = 'slow';        // 'slow' = slow→thick, 'fast' = fast→thick
+let lastPointerTime = 0;
+let lastPointerSpeed = 0;        // pixels/ms, exponentially smoothed (heavy, ~0.06)
 let stabMode = 'post';
 let rawStrokePath = [];
 let isPostStrokePreview = false;
@@ -531,10 +535,9 @@ const brushTypesData = [
     { id: 'lazo-borrador', name: 'Lazo Borrador', shortcut: 'w', hardness: 1.0, isLasso: true, lassoColor: '#ff0000', isEraser: true, size: 10, opacity: 1.00, blur: 0 },
     // ── Shape tools ──
     { id: 'linea', name: 'Línea', shortcut: 'f', isShape: true, shapeType: 'line', useCompositing: true, useTexture: false, hardness: 1.0, size: 3, opacity: 1.00, blur: 0 },
-    { id: 'rectangulo', name: 'Rectángulo', shortcut: 'g', isShape: true, shapeType: 'rect', useCompositing: true, useTexture: false, hardness: 1.0, size: 2, opacity: 1.00, blur: 0 },
-    { id: 'circulo', name: 'Círculo / Elipse', shortcut: 'h', isShape: true, shapeType: 'ellipse', useCompositing: true, useTexture: false, hardness: 1.0, size: 2, opacity: 1.00, blur: 0 },
+    { id: 'rectangulo', name: 'Rectángulo', shortcut: 'g', isShape: true, shapeType: 'rect', useCompositing: true, useTexture: false, hardness: 1.0, size: 3, opacity: 1.00, blur: 0 },
+    { id: 'circulo', name: 'Círculo / Elipse', shortcut: 'h', isShape: true, shapeType: 'ellipse', useCompositing: true, useTexture: false, hardness: 1.0, size: 3, opacity: 1.00, blur: 0 },
     { id: 'push-brush', name: 'Empujar', isPush: true, shortcut: 'v', size: 5, opacity: 0.5, blur: 0 },
-    { id: 'difuminar-agua', name: 'Difuminar (Agua)', shortcut: 'k', isBlur: true, useTexture: true, size: 5, opacity: 0.5, blur: 15 },
     { id: 'difuminar-arrastre', name: 'Difuminar (Arrastre)', shortcut: 'l', isSmudge: true, useTexture: true, size: 5, opacity: 0.5, blur: 0 },
     { id: 'difuminar-gauss', name: 'Difuminar (Gausiano)', shortcut: 'ñ', isGaussBlur: true, useTexture: true, size: 18, opacity: 1.0, blur: 2 },
 ];
@@ -861,10 +864,13 @@ function init() {
     blurSlider.oninput = (e) => { currentBlur = e.target.value | 0; blurValueLabel.textContent = currentBlur; currentBrush.blur = currentBlur; updateTintedTexture(); };
     blurSlider.onpointerup = (e) => e.target.blur();
 
-    const stabModeSelect = document.getElementById('stab-mode-select');
-    if (stabModeSelect) {
-        stabModeSelect.onchange = (e) => { stabMode = e.target.value; };
-        stabModeSelect.value = stabMode;
+    const stabModeBtn = document.getElementById('stab-mode-btn');
+    if (stabModeBtn) {
+        stabModeBtn.addEventListener('click', () => {
+            stabMode = stabMode === 'post' ? 'realtime' : 'post';
+            stabModeBtn.textContent = stabMode === 'post' ? 'POST' : 'VIVO';
+            stabModeBtn.style.color = stabMode === 'post' ? '#8cf' : '#aaa';
+        });
     }
 
     stabilizerSlider.oninput = (e) => { stabEnabled = e.target.value | 0; stabilizerValue.textContent = stabEnabled; };
@@ -874,10 +880,30 @@ function init() {
     const pressureValueLabel = document.getElementById('pressure-value');
     if (pressureSlider) {
         pressureSlider.oninput = (e) => {
+            // Slider 0-200 → sensitivity 0.0-2.0
             pressureSensitivity = parseInt(e.target.value) / 100;
             pressureValueLabel.textContent = e.target.value + '%';
         };
         pressureSlider.onpointerup = (e) => e.target.blur();
+    }
+
+    const velocitySlider     = document.getElementById('velocity-slider');
+    const velocityValueLabel = document.getElementById('velocity-value');
+    if (velocitySlider) {
+        velocitySlider.oninput = (e) => {
+            velocitySensitivity = parseInt(e.target.value) / 100;
+            velocityValueLabel.textContent = e.target.value + '%';
+        };
+        velocitySlider.onpointerup = (e) => e.target.blur();
+    }
+
+    const velocityModeBtn = document.getElementById('velocity-mode-btn');
+    if (velocityModeBtn) {
+        velocityModeBtn.addEventListener('click', () => {
+            velocityMode = velocityMode === 'slow' ? 'fast' : 'slow';
+            velocityModeBtn.textContent  = velocityMode === 'slow' ? 'LENTO=+' : 'RÁPIDO=+';
+            velocityModeBtn.style.color  = velocityMode === 'slow' ? '#aaa' : '#8cf';
+        });
     }
 
     resetRotationBtn.onclick = resetRotation;
@@ -4442,6 +4468,16 @@ function handlePointerMove(e) {
                 if (stabEnabled > 0 && stabMode === 'post') {
                     rawStrokePath.push({ x: cX, y: cY, p: smoothedPressure });
                 }
+                // Track pointer speed for velocity sensitivity
+                const now = performance.now();
+                const dt = now - lastPointerTime;
+                if (dt > 0) {
+                    const dist = Math.hypot(cX - lastX, cY - lastY);
+                    const rawSpeed = dist / dt;
+                    // Heavy smoothing (alpha=0.06) prevents jitter/dots
+                    lastPointerSpeed += (rawSpeed - lastPointerSpeed) * 0.06;
+                }
+                lastPointerTime = now;
                 drawStabLineTo(lastX, lastY, lastPressure, cX, cY, smoothedPressure);
                 [lastX, lastY, lastPressure] = [cX, cY, smoothedPressure];
             }
@@ -4673,16 +4709,27 @@ function executeLassoFill() {
     smoothPath.forEach(p => l.ctx.lineTo(p.x, p.y)); l.ctx.closePath(); l.ctx.fill(); l.ctx.restore();
 }
 function drawPoint(x, y, pressure) {
-    const minScale = 1.0 - (0.8 * pressureSensitivity);
-    const maxScale = 1.0 + (1.0 * pressureSensitivity);
-    const size = baseBrushSize * (minScale + pressure * (maxScale - minScale)); 
+    // Pressure: sensitivity 0-2.0, scaled so at 2.0 range is ~0% to 300% of base size
+    const minScale = Math.max(0.01, 1.0 - (0.9 * pressureSensitivity));
+    const maxScale = 1.0 + (1.5 * pressureSensitivity);
+    let size = baseBrushSize * (minScale + pressure * (maxScale - minScale));
+
+    // Velocity size modulation
+    if (velocitySensitivity > 0) {
+        // Sqrt curve: smooth transitions, avoids harsh jumps at low speeds
+        const normalised = Math.min(1.0, Math.sqrt(lastPointerSpeed / 2.5));
+        // 'slow' mode: slow→thick (default). 'fast' mode: fast→thick (inverted)
+        const factor = velocityMode === 'slow'
+            ? (1.0 - velocitySensitivity * normalised * 0.82)
+            : (1.0 - velocitySensitivity * (1.0 - normalised) * 0.82);
+        size *= Math.max(0.05, factor);
+    }
+    size = Math.max(0.05, size);
     if (size <= 0) return;
     const l = layers[selectedLayerIndex];
 
     if (currentBrush.isBlur) {
         l.ctx.save();
-        if (l.alphaLocked) l.ctx.globalCompositeOperation = 'source-atop';
-
         const side = Math.ceil(size * 2);
         if (side < 1) { l.ctx.restore(); return; }
 
@@ -4696,30 +4743,19 @@ function drawPoint(x, y, pressure) {
         blurTempCtx.clearRect(0, 0, side, side);
         blurTempCtx.drawImage(l.canvas, x - side / 2, y - side / 2, side, side, 0, 0, side, side);
 
-        // 2. Color Bleeding Pass (The "Pro" fix for semi-transparency)
-        // We draw the snippet over itself with offsets to "expand" the colors into transparent areas
+        // 2. Perform Blur directly into bleedCanvas (without opacity-boosting bleed hacks)
         bleedCtx.clearRect(0, 0, side, side);
-        bleedCtx.drawImage(blurTempCanvas, 0, 0);
-        bleedCtx.globalCompositeOperation = 'destination-over';
-        for (let d = 1; d <= 3; d += 1) { // 3px bleed radius
-            bleedCtx.drawImage(blurTempCanvas, d, 0); bleedCtx.drawImage(blurTempCanvas, -d, 0);
-            bleedCtx.drawImage(blurTempCanvas, 0, d); bleedCtx.drawImage(blurTempCanvas, 0, -d);
-        }
-        bleedCtx.globalCompositeOperation = 'source-over';
-
-        // 3. Manual Multi-Sample Blur using the "Bled" canvas
-        brushMaskCtx.clearRect(0, 0, side, side);
         const samples = 6;
         const radius = Math.max(1, currentBrush.blur / 6);
-        brushMaskCtx.globalAlpha = 1 / samples;
+        bleedCtx.globalAlpha = 1 / samples;
         for (let i = 0; i < samples; i++) {
             const ang = (i / samples) * Math.PI * 2;
-            brushMaskCtx.drawImage(bleedCanvas, Math.cos(ang) * radius, Math.sin(ang) * radius);
+            bleedCtx.drawImage(blurTempCanvas, Math.cos(ang) * radius, Math.sin(ang) * radius);
         }
-        brushMaskCtx.globalAlpha = 1.0;
+        bleedCtx.globalAlpha = 1.0;
 
-        // 3. Mask with texture
-        brushMaskCtx.globalCompositeOperation = 'destination-in';
+        // 3. Create the Mask in brushMaskCanvas
+        brushMaskCtx.clearRect(0, 0, side, side);
         if (currentBrush.useTexture && tintedAirbrushCanvas) {
             brushMaskCtx.drawImage(tintedAirbrushCanvas, 0, 0, side, side);
         } else {
@@ -4727,25 +4763,46 @@ function drawPoint(x, y, pressure) {
             g.addColorStop(0, 'white'); g.addColorStop(1, 'rgba(255,255,255,0)');
             brushMaskCtx.fillStyle = g; brushMaskCtx.fillRect(0, 0, side, side);
         }
+
+        // Apply brush opacity to the mask itself
+        brushMaskCtx.globalCompositeOperation = 'destination-in';
+        brushMaskCtx.fillStyle = `rgba(255, 255, 255, ${brushOpacity})`;
+        brushMaskCtx.fillRect(0, 0, side, side);
         brushMaskCtx.globalCompositeOperation = 'source-over';
 
-        // 4. Draw back
-        l.ctx.globalAlpha = brushOpacity;
-        l.ctx.drawImage(brushMaskCanvas, 0, 0, side, side, x - side / 2, y - side / 2, side, side);
+        // 4. Mask the Blurred image
+        bleedCtx.globalCompositeOperation = 'destination-in';
+        bleedCtx.drawImage(brushMaskCanvas, 0, 0);
+        bleedCtx.globalCompositeOperation = 'source-over';
+
+        // 5. Update Layer using correct interpolation
+        if (l.alphaLocked) {
+            l.ctx.globalCompositeOperation = 'source-atop';
+            l.ctx.drawImage(bleedCanvas, 0, 0, side, side, x - side / 2, y - side / 2, side, side);
+        } else {
+            l.ctx.globalCompositeOperation = 'destination-out';
+            l.ctx.drawImage(brushMaskCanvas, 0, 0, side, side, x - side / 2, y - side / 2, side, side);
+            l.ctx.globalCompositeOperation = 'lighter';
+            l.ctx.drawImage(bleedCanvas, 0, 0, side, side, x - side / 2, y - side / 2, side, side);
+        }
         l.ctx.restore();
     }
     else if (currentBrush.isGaussBlur && blurBuffer) {
         l.ctx.save();
-        if (l.alphaLocked) l.ctx.globalCompositeOperation = 'source-atop';
 
         const side = Math.ceil(size * 2);
         if (side < 1) { l.ctx.restore(); return; }
 
         if (brushMaskCanvas.width < side || brushMaskCanvas.height < side) {
             brushMaskCanvas.width = side + 20; brushMaskCanvas.height = side + 20;
+            bleedCanvas.width = side + 20; bleedCanvas.height = side + 20;
         }
 
-        // 1. Mask with texture
+        // 1. Get blurred area from global blur buffer
+        bleedCtx.clearRect(0, 0, side, side);
+        bleedCtx.drawImage(blurBuffer, x - side / 2, y - side / 2, side, side, 0, 0, side, side);
+
+        // 2. Create mask
         brushMaskCtx.clearRect(0, 0, side, side);
         if (currentBrush.useTexture && tintedAirbrushCanvas) {
             brushMaskCtx.drawImage(tintedAirbrushCanvas, 0, 0, side, side);
@@ -4755,33 +4812,46 @@ function drawPoint(x, y, pressure) {
             brushMaskCtx.fillStyle = g; brushMaskCtx.fillRect(0, 0, side, side);
         }
 
-        // 2. Draw pre-blurred content through the mask
-        brushMaskCtx.globalCompositeOperation = 'source-in';
-        brushMaskCtx.drawImage(blurBuffer, x - side / 2, y - side / 2, side, side, 0, 0, side, side);
+        // Apply brush opacity to mask
+        brushMaskCtx.globalCompositeOperation = 'destination-in';
+        brushMaskCtx.fillStyle = `rgba(255, 255, 255, ${brushOpacity})`;
+        brushMaskCtx.fillRect(0, 0, side, side);
         brushMaskCtx.globalCompositeOperation = 'source-over';
 
-        // 3. Draw back
-        l.ctx.globalAlpha = brushOpacity;
-        l.ctx.drawImage(brushMaskCanvas, 0, 0, side, side, x - side / 2, y - side / 2, side, side);
+        // 3. Mask the blurred image
+        bleedCtx.globalCompositeOperation = 'destination-in';
+        bleedCtx.drawImage(brushMaskCanvas, 0, 0);
+        bleedCtx.globalCompositeOperation = 'source-over';
+
+        // 4. Update Layer
+        if (l.alphaLocked) {
+            l.ctx.globalCompositeOperation = 'source-atop';
+            l.ctx.drawImage(bleedCanvas, 0, 0, side, side, x - side / 2, y - side / 2, side, side);
+        } else {
+            l.ctx.globalCompositeOperation = 'destination-out';
+            l.ctx.drawImage(brushMaskCanvas, 0, 0, side, side, x - side / 2, y - side / 2, side, side);
+            l.ctx.globalCompositeOperation = 'lighter';
+            l.ctx.drawImage(bleedCanvas, 0, 0, side, side, x - side / 2, y - side / 2, side, side);
+        }
         l.ctx.restore();
     }
     else if (currentBrush.isSmudge && smudgeBuffer) {
         l.ctx.save();
-        if (l.alphaLocked) l.ctx.globalCompositeOperation = 'source-atop';
 
-        const side = Math.ceil(size * 2.5); // Slightly larger capture area for "wet" feel
+        const side = Math.ceil(size * 2.5);
         if (side < 1) { l.ctx.restore(); return; }
 
         if (brushMaskCanvas.width < side || brushMaskCanvas.height < side) {
             brushMaskCanvas.width = side + 20; brushMaskCanvas.height = side + 20;
+            bleedCanvas.width = side + 20; bleedCanvas.height = side + 20;
         }
 
-        // 1. Prepare the smudge tip
-        brushMaskCtx.clearRect(0, 0, side, side);
-        brushMaskCtx.drawImage(smudgeBuffer, 0, 0, smudgeBuffer.width, smudgeBuffer.height, 0, 0, side, side);
+        // 1. Prepare the smudge tip in bleedCanvas
+        bleedCtx.clearRect(0, 0, side, side);
+        bleedCtx.drawImage(smudgeBuffer, 0, 0, smudgeBuffer.width, smudgeBuffer.height, 0, 0, side, side);
 
-        // 2. Texture masking
-        brushMaskCtx.globalCompositeOperation = 'destination-in';
+        // 2. Create mask
+        brushMaskCtx.clearRect(0, 0, side, side);
         if (currentBrush.useTexture && tintedAirbrushCanvas) {
             brushMaskCtx.drawImage(tintedAirbrushCanvas, 0, 0, side, side);
         } else {
@@ -4789,34 +4859,41 @@ function drawPoint(x, y, pressure) {
             g.addColorStop(0, 'white'); g.addColorStop(1, 'rgba(255,255,255,0)');
             brushMaskCtx.fillStyle = g; brushMaskCtx.fillRect(0, 0, side, side);
         }
+
+        // Apply brush opacity to mask
+        brushMaskCtx.globalCompositeOperation = 'destination-in';
+        brushMaskCtx.fillStyle = `rgba(255, 255, 255, ${brushOpacity})`;
+        brushMaskCtx.fillRect(0, 0, side, side);
         brushMaskCtx.globalCompositeOperation = 'source-over';
 
-        // 3. Draw the smudge (with a slight shift to make it feel like "dragging")
-        l.ctx.globalAlpha = brushOpacity;
-        l.ctx.drawImage(brushMaskCanvas, 0, 0, side, side, x - side / 2, y - side / 2, side, side);
+        // 3. Mask the smudge tip
+        bleedCtx.globalCompositeOperation = 'destination-in';
+        bleedCtx.drawImage(brushMaskCanvas, 0, 0);
+        bleedCtx.globalCompositeOperation = 'source-over';
 
-        // 4. Update smudge buffer (intelligent pick up)
+        // 4. Update Layer
+        if (l.alphaLocked) {
+            l.ctx.globalCompositeOperation = 'source-atop';
+            l.ctx.drawImage(bleedCanvas, 0, 0, side, side, x - side / 2, y - side / 2, side, side);
+        } else {
+            l.ctx.globalCompositeOperation = 'destination-out';
+            l.ctx.drawImage(brushMaskCanvas, 0, 0, side, side, x - side / 2, y - side / 2, side, side);
+            l.ctx.globalCompositeOperation = 'lighter';
+            l.ctx.drawImage(bleedCanvas, 0, 0, side, side, x - side / 2, y - side / 2, side, side);
+        }
+
+        // 5. Update smudge buffer (intelligent pick up, without opacity-boosting bleed hacks)
         const sctx = smudgeBuffer.getContext('2d');
-        // Capture new pixels
         blurTempCtx.clearRect(0, 0, side, side);
         blurTempCtx.drawImage(l.canvas, x - side / 2, y - side / 2, side, side, 0, 0, side, side);
 
-        // Color Bleeding for Smudge (prevents dirty drags)
-        bleedCtx.clearRect(0, 0, side, side);
-        bleedCtx.drawImage(blurTempCanvas, 0, 0);
-        bleedCtx.globalCompositeOperation = 'destination-over';
-        bleedCtx.drawImage(blurTempCanvas, 1, 0); bleedCtx.drawImage(blurTempCanvas, -1, 0);
-        bleedCtx.drawImage(blurTempCanvas, 0, 1); bleedCtx.drawImage(blurTempCanvas, 0, -1);
-        bleedCtx.globalCompositeOperation = 'source-over';
-
-        // Blend bled colors into the buffer
         sctx.globalAlpha = 0.12;
         sctx.globalCompositeOperation = 'source-atop';
-        sctx.drawImage(bleedCanvas, 0, 0, side, side, 0, 0, smudgeBuffer.width, smudgeBuffer.height);
+        sctx.drawImage(blurTempCanvas, 0, 0, side, side, 0, 0, smudgeBuffer.width, smudgeBuffer.height);
         sctx.globalCompositeOperation = 'source-over';
 
         sctx.globalAlpha = 0.02;
-        sctx.drawImage(bleedCanvas, 0, 0, side, side, 0, 0, smudgeBuffer.width, smudgeBuffer.height);
+        sctx.drawImage(blurTempCanvas, 0, 0, side, side, 0, 0, smudgeBuffer.width, smudgeBuffer.height);
 
         l.ctx.restore();
     }
@@ -4863,7 +4940,7 @@ function executePush(worldX, worldY, dx, dy) {
     if (Math.abs(dx) < 0.1 && Math.abs(dy) < 0.1) return;
 
     const radius = baseBrushSize * 8;
-    const strength = brushOpacity * 1.5;
+    const strength = brushOpacity * 1.0;
     const l = layers[selectedLayerIndex];
     if (!l) return;
 
@@ -4879,15 +4956,24 @@ function executePush(worldX, worldY, dx, dy) {
     const boxH = jEnd - jStart;
     if (boxW <= 0 || boxH <= 0) return;
 
-    const destData = l.ctx.getImageData(iStart, jStart, boxW, boxH);
-    const src = pushSnapshotPixels;
-    const dest = destData.data;
+    const tempDX = new Float32Array(boxW * boxH);
+    const tempDY = new Float32Array(boxW * boxH);
+
+    const getOldDX = (px, py) => {
+        if (px < 0 || px >= W || py < 0 || py >= H) return 0;
+        return pushDisplacementX[py * W + px];
+    };
+    const getOldDY = (px, py) => {
+        if (px < 0 || px >= W || py < 0 || py >= H) return 0;
+        return pushDisplacementY[py * W + px];
+    };
 
     let selectionPixels = null;
     if (hasSelection && selectionCanvas) {
         selectionPixels = selCtx.getImageData(0, 0, W, H).data;
     }
 
+    // Step 1: Advect displacements
     for (let j = jStart; j < jEnd; j++) {
         for (let i = iStart; i < iEnd; i++) {
             const pos = j * W + i;
@@ -4897,17 +4983,56 @@ function executePush(worldX, worldY, dx, dy) {
             }
 
             const dist = Math.hypot(i - worldX, j - worldY);
+            let wx = 0, wy = 0;
             if (dist < radius) {
                 const weight = Math.pow(1 - dist / radius, 1.5) * selFactor;
-                pushDisplacementX[pos] += dx * weight * strength;
-                pushDisplacementY[pos] += dy * weight * strength;
+                wx = dx * weight * strength;
+                wy = dy * weight * strength;
             }
 
-            // Source coordinates in the original image
-            const sx = i - pushDisplacementX[pos];
-            const sy = j - pushDisplacementY[pos];
+            const srcX = i - wx;
+            const srcY = j - wy;
 
-            // Bilinear interpolation
+            const x0 = Math.floor(srcX), x1 = x0 + 1;
+            const y0 = Math.floor(srcY), y1 = y0 + 1;
+            const fx = srcX - x0, fy = srcY - y0;
+
+            const dx00 = getOldDX(x0, y0), dx10 = getOldDX(x1, y0);
+            const dx01 = getOldDX(x0, y1), dx11 = getOldDX(x1, y1);
+            const topX = dx00 + fx * (dx10 - dx00);
+            const botX = dx01 + fx * (dx11 - dx01);
+            const interpDX = topX + fy * (botX - topX);
+
+            const dy00 = getOldDY(x0, y0), dy10 = getOldDY(x1, y0);
+            const dy01 = getOldDY(x0, y1), dy11 = getOldDY(x1, y1);
+            const topY = dy00 + fx * (dy10 - dy00);
+            const botY = dy01 + fx * (dy11 - dy01);
+            const interpDY = topY + fy * (botY - topY);
+
+            const localPos = (j - jStart) * boxW + (i - iStart);
+            tempDX[localPos] = wx + interpDX;
+            tempDY[localPos] = wy + interpDY;
+        }
+    }
+
+    // Step 2: Write back advected displacements and sample new image
+    const destData = l.ctx.getImageData(iStart, jStart, boxW, boxH);
+    const src = pushSnapshotPixels;
+    const dest = destData.data;
+
+    for (let j = jStart; j < jEnd; j++) {
+        for (let i = iStart; i < iEnd; i++) {
+            const globalPos = j * W + i;
+            const localPos = (j - jStart) * boxW + (i - iStart);
+
+            const finalDX = tempDX[localPos];
+            const finalDY = tempDY[localPos];
+            pushDisplacementX[globalPos] = finalDX;
+            pushDisplacementY[globalPos] = finalDY;
+
+            const sx = i - finalDX;
+            const sy = j - finalDY;
+
             const x0 = Math.floor(sx), x1 = x0 + 1;
             const y0 = Math.floor(sy), y1 = y0 + 1;
             const fx = sx - x0, fy = sy - y0;
@@ -4919,7 +5044,7 @@ function executePush(worldX, worldY, dx, dy) {
             };
 
             const p00 = getP(x0, y0), p10 = getP(x1, y0), p01 = getP(x0, y1), p11 = getP(x1, y1);
-            const dPos = ((j - jStart) * boxW + (i - iStart)) * 4;
+            const dPos = localPos * 4;
             for (let k = 0; k < 4; k++) {
                 const top = p00[k] + fx * (p10[k] - p00[k]);
                 const bot = p01[k] + fx * (p11[k] - p01[k]);
@@ -4927,6 +5052,7 @@ function executePush(worldX, worldY, dx, dy) {
             }
         }
     }
+
     l.ctx.putImageData(destData, iStart, jStart);
 }
 
@@ -5003,6 +5129,9 @@ function drawShapeOnCtx(tctx, x1, y1, x2, y2) {
     tctx.restore();
 }
 function updateTintedTexture() {
+    const indicator = document.getElementById('color-preview-btn-indicator');
+    if (indicator) indicator.style.backgroundColor = selectedColor;
+
     if (!airbrushTexture) return;
     tintedAirbrushCanvas.width = airbrushTexture.width;
     tintedAirbrushCanvas.height = airbrushTexture.height;
@@ -5059,9 +5188,18 @@ function drawStabLineTo(sx, sy, sp, ex, ey, ep) {
     
     if (isHardSolid) {
         const avgPressure = (sp + ep) / 2;
-        const minScale = 1.0 - (0.8 * pressureSensitivity);
-        const maxScale = 1.0 + (1.0 * pressureSensitivity);
-        const size = baseBrushSize * (minScale + avgPressure * (maxScale - minScale));
+        const minScale = Math.max(0.01, 1.0 - (0.9 * pressureSensitivity));
+        const maxScale = 1.0 + (1.5 * pressureSensitivity);
+        let size = baseBrushSize * (minScale + avgPressure * (maxScale - minScale));
+        // Velocity size modulation
+        if (velocitySensitivity > 0) {
+            const normalised = Math.min(1.0, Math.sqrt(lastPointerSpeed / 2.5));
+            const factor = velocityMode === 'slow'
+                ? (1.0 - velocitySensitivity * normalised * 0.82)
+                : (1.0 - velocitySensitivity * (1.0 - normalised) * 0.82);
+            size *= Math.max(0.05, factor);
+        }
+        size = Math.max(0.05, size);
         if (size <= 0) return;
         const l = layers[selectedLayerIndex];
         const ctx = (currentBrush.useCompositing || isPostStrokePreview) ? sctx : l.ctx;

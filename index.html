@@ -150,14 +150,6 @@
                     </div>
                 </div>
 
-                <div class="brush-settings hidden" id="blur-settings-container">
-                    <div class="slider-container vertical secondary">
-                        <div class="mini-icon" style="font-size:10px; font-weight:700; color:white;">BLUR</div>
-                        <span id="blur-value">0</span>
-                        <input type="range" id="brush-blur" min="0" max="100" value="0" orient="vertical">
-                    </div>
-                </div>
-
 
                 <button class="tool-btn active" id="btn-brush" title="Pincel">
                     <img src="simbolo pincel.png" alt="Pincel">
@@ -175,7 +167,7 @@
                 </div>
 
                 <button class="tool-btn" id="btn-colors" title="Colores">
-                    <img src="simbolo paleta de colores.png" alt="Colores">
+                    <div id="color-preview-btn-indicator" style="width: 24px; height: 24px; border-radius: 6px; border: 2px solid rgba(255,255,255,0.8); background-color: #000000; box-shadow: inset 0 0 0 1px rgba(0,0,0,0.5);"></div>
                 </button>
 
                 <!-- Menú de Colores -->
@@ -389,16 +381,24 @@
 
                 <button id="reset-rotation-btn" class="hidden">Rotación original</button>
             </div>
-            <div id="bottom-sliders-wrapper" style="position: absolute; bottom: 20px; left: 20px; display: flex; gap: 15px; z-index: 101;">
-                <div class="floating-slider-panel">
-                    <div class="floating-slider-header">
-                        <select id="stab-mode-select" style="background: transparent; border: none; font-size: 10px; font-weight: bold; color: #444; outline: none; cursor: pointer; padding: 0; appearance: none; -webkit-appearance: none;">
-                            <option value="post">Estabilizador (Post)</option>
-                            <option value="realtime">Estabilizador (Vivo)</option>
-                        </select>
-                        <span id="stabilizer-value" class="floating-slider-value">3</span>
+            <div id="bottom-sliders-wrapper" style="position: absolute; bottom: 20px; left: 20px; display: flex; gap: 15px; z-index: 101; align-items: flex-end;">
+                <div style="display: flex; flex-direction: column; gap: 10px;">
+                    <div class="floating-slider-panel hidden" id="blur-settings-container">
+                        <div class="floating-slider-header">
+                            <span>Difuminado (Blur)</span>
+                            <span id="blur-value" class="floating-slider-value">0</span>
+                        </div>
+                        <input type="range" id="brush-blur" class="floating-slider" min="0" max="100" value="0">
                     </div>
-                    <input type="range" id="stabilizer-slider" class="floating-slider" min="0" max="15" value="3">
+
+                    <div class="floating-slider-panel">
+                        <div class="floating-slider-header">
+                            <span>Estabilizador</span>
+                            <button id="stab-mode-btn" title="Cambiar modo de estabilizador" style="background:rgba(255,255,255,0.10);border:1px solid rgba(255,255,255,0.18);border-radius:4px;color:#8cf;font-size:9px;font-weight:700;padding:1px 5px;cursor:pointer;line-height:1.4;letter-spacing:0.04em;">POST</button>
+                            <span id="stabilizer-value" class="floating-slider-value">3</span>
+                        </div>
+                        <input type="range" id="stabilizer-slider" class="floating-slider" min="0" max="15" value="3">
+                    </div>
                 </div>
                 
                 <div class="floating-slider-panel">
@@ -406,7 +406,16 @@
                         <span>Sensibilidad (Presión)</span>
                         <span id="pressure-value" class="floating-slider-value">80%</span>
                     </div>
-                    <input type="range" id="pressure-slider" class="floating-slider" min="0" max="100" value="80">
+                    <input type="range" id="pressure-slider" class="floating-slider" min="0" max="200" value="80">
+                </div>
+
+                <div class="floating-slider-panel">
+                    <div class="floating-slider-header">
+                        <span>Velocidad</span>
+                        <button id="velocity-mode-btn" title="Cambiar modo de velocidad" style="background:rgba(255,255,255,0.10);border:1px solid rgba(255,255,255,0.18);border-radius:4px;color:#aaa;font-size:9px;font-weight:700;padding:1px 5px;cursor:pointer;line-height:1.4;letter-spacing:0.04em;">LENTO=+</button>
+                        <span id="velocity-value" class="floating-slider-value">0%</span>
+                    </div>
+                    <input type="range" id="velocity-slider" class="floating-slider" min="0" max="100" value="0">
                 </div>
             </div>
             <div id="eyedropper-preview" class="hidden">
