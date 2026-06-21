@@ -229,7 +229,7 @@ let rotationPivot = null;
 
 // Stabilizer state
 let stabEnabled = 3;
-let pressureSensitivity = 0.8;
+let pressureSensitivity = 0.6;
 let velocitySensitivity = 0.0;   // 0 = off, 1 = full
 let velocityMode = 'slow';        // 'slow' = slow→thick, 'fast' = fast→thick
 let lastPointerTime = 0;
@@ -263,6 +263,7 @@ let selectionCanvas = null; let selCtx = null;
 let hasSelection = false;
 let copyMode = 'capa';  // 'capa' | 'todas' | 'canvas'
 let pasteInNewLayer = false;
+let internalClipboardBounds = null;
 let cursorMode = 'always'; // 'always' | 'auto'
 
 // Lasso selection state
@@ -279,6 +280,10 @@ let shapeFromCenterRect = false;
 let shapeFromCenterCircle = true;
 let shapeFromCenterBtn = null;
 let shapeFillBtn = null;
+let shapeModifiableLine = false;
+let shapeModifiableRect = true;
+let shapeModifiableCircle = true;
+let shapeModifiableBtn = null;
 
 // Modify Selection state
 let modifySelMode = 'capa';  // 'capa' | 'lienzo'
@@ -296,6 +301,7 @@ let modSelRotation = 0;
 let modSelFlipX = 1;
 let modSelFlipY = 1;
 let isImportingNewImage = false; // flag for ghost import
+let isModifyingShape = false; // flag for shape modification
 let flipControls = null;
 let flipHBtn = null;
 let flipVBtn = null;
@@ -517,7 +523,7 @@ let toolsData = [
     { id: 'zoom', name: 'Zoom', shortcut: 'z' },
     { id: 'pan', name: 'Pan', shortcut: 'x' },
     { id: 'rotate', name: 'Girar Lienzo', shortcut: 'r' },
-    { id: 'bucket', name: 'Cubeta', shortcut: 'b' },
+    { id: 'bucket', name: 'Cubeta', shortcut: 'b', opacity: 1.0 },
     { id: 'lazo-sel', name: 'Lazo Seleccionador', shortcut: 'n' },
     { id: 'lazo-des', name: 'Lazo Deseleccionador', shortcut: 'j' },
     { id: 'modify-sel', name: 'Modificar Selección', shortcut: 'm' },
@@ -539,7 +545,7 @@ const brushTypesData = [
     { id: 'circulo', name: 'Círculo / Elipse', shortcut: 'h', isShape: true, shapeType: 'ellipse', useCompositing: true, useTexture: false, hardness: 1.0, size: 3, opacity: 1.00, blur: 0 },
     { id: 'push-brush', name: 'Empujar', isPush: true, shortcut: 'v', size: 5, opacity: 0.5, blur: 0 },
     { id: 'difuminar-arrastre', name: 'Difuminar (Arrastre)', shortcut: 'l', isSmudge: true, useTexture: true, size: 5, opacity: 0.5, blur: 0 },
-    { id: 'difuminar-gauss', name: 'Difuminar (Gausiano)', shortcut: 'ñ', isGaussBlur: true, useTexture: true, size: 18, opacity: 1.0, blur: 2 },
+    { id: 'difuminar-gauss', name: 'Difuminar (Gausiano)', shortcut: 'ñ', isGaussBlur: true, useTexture: false, hardness: 0.5, size: 18, opacity: 1.0, blur: 2 },
 ];
 
 
@@ -774,7 +780,18 @@ function init() {
     })();
     // ──────────────────────────────────────────────────────────
 
-    opacitySlider.oninput = (e) => { brushOpacity = e.target.value / 100; opacityValue.textContent = e.target.value + '%'; currentBrush.opacity = brushOpacity; if (eyeIcon) eyeIcon.src = (e.target.value | 0) === 0 ? 'simbolo ojo cerrado.png' : 'simbolo ojo abierto.png'; requestRender(); };
+    opacitySlider.oninput = (e) => { 
+        brushOpacity = e.target.value / 100; 
+        opacityValue.textContent = e.target.value + '%'; 
+        if (currentTool === 'bucket') {
+            const t = toolsData.find(x => x.id === 'bucket');
+            if (t) t.opacity = brushOpacity;
+        } else if (currentBrush) {
+            currentBrush.opacity = brushOpacity; 
+        }
+        if (eyeIcon) eyeIcon.src = (e.target.value | 0) === 0 ? 'simbolo ojo cerrado.png' : 'simbolo ojo abierto.png'; 
+        requestRender(); 
+    };
     opacitySlider.onpointerup = (e) => e.target.blur();
 
     // ── Opacity Preset Popup ───────────────────────────────────
@@ -842,7 +859,12 @@ function init() {
                 brushOpacity = pct / 100;
                 opacitySlider.value = pct;
                 opacityValue.textContent = pct + '%';
-                currentBrush.opacity = brushOpacity;
+                if (currentTool === 'bucket') {
+                    const t = toolsData.find(x => x.id === 'bucket');
+                    if (t) t.opacity = brushOpacity;
+                } else if (currentBrush) {
+                    currentBrush.opacity = brushOpacity;
+                }
                 if (eyeIcon) eyeIcon.src = pct === 0 ? 'simbolo ojo cerrado.png' : 'simbolo ojo abierto.png';
                 requestRender();
                 refreshActive();
@@ -2397,6 +2419,19 @@ function buildSelectionUI() {
         updateShapeFromCenterUI();
     };
     container.appendChild(shapeFromCenterBtn);
+
+    // Shape Modifiable toggle
+    shapeModifiableBtn = document.createElement('button');
+    shapeModifiableBtn.id = 'shape-modifiable-btn';
+    shapeModifiableBtn.className = 'indicator-extra-btn hidden';
+    shapeModifiableBtn.onclick = () => {
+        const type = currentBrush.shapeType;
+        if (type === 'rect') shapeModifiableRect = !shapeModifiableRect;
+        else if (type === 'ellipse') shapeModifiableCircle = !shapeModifiableCircle;
+        else if (type === 'line') shapeModifiableLine = !shapeModifiableLine;
+        updateShapeModifiableUI();
+    };
+    container.appendChild(shapeModifiableBtn);
 }
 
 function updateShapeFromCenterUI() {
@@ -2409,20 +2444,41 @@ function updateShapeFromCenterUI() {
     shapeFromCenterBtn.style.color = active ? 'white' : '';
 }
 
+function updateShapeModifiableUI() {
+    if (!shapeModifiableBtn || !currentBrush) return;
+    const type = currentBrush.shapeType;
+    let active = false;
+    if (type === 'rect') active = shapeModifiableRect;
+    else if (type === 'ellipse') active = shapeModifiableCircle;
+    else if (type === 'line') active = shapeModifiableLine;
+
+    shapeModifiableBtn.textContent = `MODIFICABLE: ${active ? 'ON' : 'OFF'}`;
+    shapeModifiableBtn.style.background = active ? '#0066ff' : '';
+    shapeModifiableBtn.style.color = active ? 'white' : '';
+    shapeModifiableBtn.style.display = 'block';
+    shapeModifiableBtn.style.marginTop = '5px';
+}
+
 function showSelectionButtons(tool) {
     // Hide all extras first
-    [lassoSelBtn, lassoDesBtn, modifySelBtn, clearSelBtn, shapeFillBtn, shapeFromCenterBtn, fitScreenBtn].forEach(b => { if (b) b.classList.add('hidden'); });
+    [lassoSelBtn, lassoDesBtn, modifySelBtn, clearSelBtn, shapeFillBtn, shapeFromCenterBtn, shapeModifiableBtn, fitScreenBtn].forEach(b => { if (b) b.classList.add('hidden'); });
 
     if (tool === 'lazo-sel') { if (lassoSelBtn) lassoSelBtn.classList.remove('hidden'); if (hasSelection && clearSelBtn) clearSelBtn.classList.remove('hidden'); }
     if (tool === 'lazo-des') { if (lassoDesBtn) lassoDesBtn.classList.remove('hidden'); if (hasSelection && clearSelBtn) clearSelBtn.classList.remove('hidden'); }
     if (tool === 'modify-sel') { if (modifySelBtn) modifySelBtn.classList.remove('hidden'); if (clearSelBtn) clearSelBtn.classList.remove('hidden'); }
     if (tool === 'bucket') { /* bucket panel handled by showBucketPanel() */ }
-    // Show fill toggle for rect & ellipse shapes
-    if (tool === 'pincel' && currentBrush.isShape && currentBrush.shapeType !== 'line') {
-        if (shapeFillBtn) shapeFillBtn.classList.remove('hidden');
-        if (shapeFromCenterBtn) {
-            shapeFromCenterBtn.classList.remove('hidden');
-            updateShapeFromCenterUI();
+    
+    if (tool === 'pincel' && currentBrush.isShape) {
+        if (currentBrush.shapeType !== 'line') {
+            if (shapeFillBtn) shapeFillBtn.classList.remove('hidden');
+            if (shapeFromCenterBtn) {
+                shapeFromCenterBtn.classList.remove('hidden');
+                updateShapeFromCenterUI();
+            }
+        }
+        if (shapeModifiableBtn) {
+            shapeModifiableBtn.classList.remove('hidden');
+            updateShapeModifiableUI();
         }
     }
     if (tool === 'zoom') { if (fitScreenBtn) fitScreenBtn.classList.remove('hidden'); }
@@ -2492,6 +2548,7 @@ function subtractPathFromSelection(path) {
 }
 
 function clearSelection() {
+    const wasSelection = hasSelection;
     if (selectionCanvas && selCtx) selCtx.clearRect(0, 0, paperWidth, paperHeight);
     hasSelection = false;
     // commit any pending modify
@@ -2501,7 +2558,7 @@ function clearSelection() {
     if (clearSelBtn) clearSelBtn.classList.add('hidden');
     showSelectionButtons(currentTool);
     updateSelectionOutline();
-    pushHistory();
+    if (wasSelection) pushHistory();
     requestRender();
 }
 
@@ -2825,7 +2882,7 @@ function commitModifySelection() {
                 item.layer.ctx.restore();
             });
         } else if (isImportingNewImage) {
-            if (pasteInNewLayer) {
+            if (pasteInNewLayer && !isModifyingShape) {
                 const lCanvas = document.createElement('canvas'); lCanvas.width = paperWidth; lCanvas.height = paperHeight;
                 const lCtx = lCanvas.getContext('2d', { willReadFrequently: true });
                 applyPerspectiveWarpToLayer(lCtx, modSelCanvas, perspCorners);
@@ -2851,7 +2908,7 @@ function commitModifySelection() {
     }
 
     if (isImportingNewImage) {
-        if (pasteInNewLayer) {
+        if (pasteInNewLayer && !isModifyingShape) {
             // Create the new layer for the imported image
             const lCanvas = document.createElement('canvas');
             lCanvas.width = paperWidth; lCanvas.height = paperHeight;
@@ -2927,6 +2984,11 @@ function commitModifySelection() {
     if (flipControls) flipControls.classList.add('hidden');
     updateThumbnails(); updateLayersUI();
     pushHistory();
+    
+    if (isModifyingShape) {
+        isModifyingShape = false;
+        selectTool('pincel', 'Pincel');
+    }
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -3081,9 +3143,10 @@ async function copyFlatImageToClipboard() {
 }
 
 async function copyToClipboard() {
-    if (!hasSelection) { alert("Selecciona un área primero para copiar."); return; }
+    if (!hasSelection) { alert("Selecciona un área primero para copiar."); return false; }
     const bounds = getSelectionBounds();
-    if (!bounds) return;
+    if (!bounds) return false;
+    internalClipboardBounds = { ...bounds };
 
     const temp = document.createElement('canvas');
     temp.width = bounds.w; temp.height = bounds.h;
@@ -3117,16 +3180,39 @@ async function copyToClipboard() {
         tctx.restore();
     }
 
-    temp.toBlob(async blob => {
-        try {
-            const item = new ClipboardItem({ "image/png": blob });
-            await navigator.clipboard.write([item]);
-            console.log("Copiado al portapapeles");
-        } catch (err) { alert("Error al copiar: " + err); }
-    }, 'image/png');
+    return new Promise((resolve) => {
+        temp.toBlob(async blob => {
+            try {
+                const item = new ClipboardItem({ "image/png": blob });
+                await navigator.clipboard.write([item]);
+                console.log("Copiado al portapapeles");
+                resolve(true);
+            } catch (err) { 
+                alert("Error al copiar: " + err); 
+                resolve(false);
+            }
+        }, 'image/png');
+    });
 }
 
-async function pasteFromClipboard() {
+async function cutToClipboard() {
+    if (!hasSelection) { alert("Selecciona un área primero para cortar."); return; }
+    if (modSelInitialized) { alert("Aplica la modificación antes de cortar."); return; }
+
+    const success = await copyToClipboard();
+    if (success) {
+        const l = layers[selectedLayerIndex];
+        l.ctx.save();
+        l.ctx.globalCompositeOperation = 'destination-out';
+        l.ctx.drawImage(selectionCanvas, 0, 0);
+        l.ctx.restore();
+        clearSelection(); // Remove selection mask after deletion
+        updateThumbnails(); updateLayersUI();
+        pushHistory();
+    }
+}
+
+async function pasteFromClipboard(pasteInPlace = false) {
     clearSelection();
     try {
         const items = await navigator.clipboard.read();
@@ -3139,8 +3225,13 @@ async function pasteFromClipboard() {
                     img.onload = () => {
                         // Position top-left of image at the center of the current screen view
                         const viewCenter = screenToWorld(canvas.width / 2, canvas.height / 2);
-                        const x = Math.round(viewCenter.x);
-                        const y = Math.round(viewCenter.y);
+                        let x = Math.round(viewCenter.x - img.width / 2);
+                        let y = Math.round(viewCenter.y - img.height / 2);
+
+                        if (pasteInPlace && internalClipboardBounds && internalClipboardBounds.w === img.width && internalClipboardBounds.h === img.height) {
+                            x = internalClipboardBounds.x;
+                            y = internalClipboardBounds.y;
+                        }
 
                         if (pasteInNewLayer) {
                             // ── Nueva capa ──
@@ -4247,22 +4338,7 @@ function handlePointerDown(e) {
             pushDisplacementY = new Float32Array(paperWidth * paperHeight);
         }
     }
-    else if (currentBrush.isBlur) { blurBuffer = null; }
-    else if (currentBrush.isGaussBlur) {
-        blurBuffer = document.createElement('canvas');
-        blurBuffer.width = paperWidth;
-        blurBuffer.height = paperHeight;
-        const bctx = blurBuffer.getContext('2d');
-        bctx.filter = `blur(${currentBrush.blur}px)`;
-        bctx.drawImage(layers[selectedLayerIndex].canvas, 0, 0);
-    }
-    else if (currentBrush.isSmudge) {
-        const side = Math.ceil(baseBrushSize * 2.5);
-        smudgeBuffer = document.createElement('canvas');
-        smudgeBuffer.width = side; smudgeBuffer.height = side;
-        const sctx = smudgeBuffer.getContext('2d');
-        sctx.drawImage(layers[selectedLayerIndex].canvas, world.x - side / 2, world.y - side / 2, side, side, 0, 0, side, side);
-    }
+
     else if (currentTool === 'lazo-sel' || currentTool === 'lazo-des') {
         lassoSelStartX = world.x; lassoSelStartY = world.y;
         if (lassoSelMode === 'libre') lassoSelPath = [{ x: world.x, y: world.y }];
@@ -4286,6 +4362,23 @@ function handlePointerDown(e) {
         }
     }
     else if (currentTool === 'pincel') {
+        if (currentBrush.isBlur) { blurBuffer = null; }
+        else if (currentBrush.isGaussBlur) {
+            blurBuffer = document.createElement('canvas');
+            blurBuffer.width = paperWidth;
+            blurBuffer.height = paperHeight;
+            const bctx = blurBuffer.getContext('2d');
+            bctx.filter = `blur(${currentBrush.blur}px)`;
+            bctx.drawImage(layers[selectedLayerIndex].canvas, 0, 0);
+        }
+        else if (currentBrush.isSmudge) {
+            const side = Math.ceil(baseBrushSize * 2.5);
+            smudgeBuffer = document.createElement('canvas');
+            smudgeBuffer.width = side; smudgeBuffer.height = side;
+            const sctx = smudgeBuffer.getContext('2d');
+            sctx.drawImage(layers[selectedLayerIndex].canvas, world.x - side / 2, world.y - side / 2, side, side, 0, 0, side, side);
+        }
+
         if (currentBrush.isLasso) {
             lassoPath.push({ x: world.x, y: world.y });
             lassoLastScreenX = e.offsetX; lassoLastScreenY = e.offsetY;
@@ -4293,12 +4386,12 @@ function handlePointerDown(e) {
             shapeStartX = world.x; shapeStartY = world.y;
             sctx.clearRect(0, 0, strokeCanvas.width, strokeCanvas.height);
         } else {
-            if (stabEnabled > 0 && stabMode === 'post' && !currentBrush.isLasso && !currentBrush.isShape && currentBrush.id !== 'push-brush' && !activeFilterType) {
+            if (stabEnabled > 0 && stabMode === 'post' && !currentBrush.isLasso && !currentBrush.isShape && currentBrush.id !== 'push-brush' && !activeFilterType && !currentBrush.isGaussBlur && !currentBrush.isSmudge) {
                 isPostStrokePreview = true;
                 rawStrokePath = [{ x: lastX, y: lastY, p: smoothedPressure }];
             }
 
-            if (stabEnabled > 0 && stabMode === 'realtime') {
+            if (stabEnabled > 0 && stabMode === 'realtime' && !currentBrush.isGaussBlur && !currentBrush.isSmudge) {
                 stabPoints = [];
                 stabOutX = null; stabOutY = null; stabOutP = null;
                 stabPoints.push({ x: lastX, y: lastY, p: smoothedPressure });
@@ -4453,7 +4546,7 @@ function handlePointerMove(e) {
             drawShapeOnCtx(sctx, shapeStartX, shapeStartY, ex, ey);
         } else {
             smoothedPressure += ((e.pressure || 0.1) - smoothedPressure) * 0.3;
-            if (stabEnabled > 0 && stabMode === 'realtime') {
+            if (stabEnabled > 0 && stabMode === 'realtime' && !currentBrush.isGaussBlur && !currentBrush.isSmudge) {
                 const sp = stabilizePoint(cX, cY, smoothedPressure, stabEnabled);
                 lastX = cX; lastY = cY; lastPressure = smoothedPressure;
                 if (sp) {
@@ -4465,7 +4558,7 @@ function handlePointerMove(e) {
                     stabOutX = sp.x; stabOutY = sp.y; stabOutP = sp.p;
                 }
             } else {
-                if (stabEnabled > 0 && stabMode === 'post') {
+                if (stabEnabled > 0 && stabMode === 'post' && !currentBrush.isGaussBlur && !currentBrush.isSmudge) {
                     rawStrokePath.push({ x: cX, y: cY, p: smoothedPressure });
                 }
                 // Track pointer speed for velocity sensitivity
@@ -4524,10 +4617,10 @@ function handlePointerUp(e) {
     else if (currentTool === 'modify-sel') {
         modSelActive = false; modSelHandle = null;
         updateFlipButtonsPosition();
-        pushHistory(); // snapshot AFTER move/resize is settled
+        if (!isModifyingShape) pushHistory(); // snapshot AFTER move/resize is settled
     }
     else if (currentTool === 'pincel') {
-        if (stabEnabled > 0 && stabMode === 'realtime' && !currentBrush.isLasso && !currentBrush.isShape && !currentBrush.useCompositing) {
+        if (stabEnabled > 0 && stabMode === 'realtime' && !currentBrush.isLasso && !currentBrush.isShape && !currentBrush.useCompositing && !currentBrush.isGaussBlur && !currentBrush.isSmudge) {
             while (stabPoints.length > 0) {
                 const p = stabPoints.shift();
                 drawPoint(p.x, p.y, p.p);
@@ -4535,7 +4628,7 @@ function handlePointerUp(e) {
             stabPoints = [];
         }
 
-        if (stabMode === 'post' && stabEnabled > 0 && rawStrokePath.length > 2 && isPostStrokePreview) {
+        if (stabMode === 'post' && stabEnabled > 0 && rawStrokePath.length > 2 && isPostStrokePreview && !currentBrush.isGaussBlur && !currentBrush.isSmudge) {
             sctx.clearRect(0, 0, strokeCanvas.width, strokeCanvas.height);
             isPostStrokePreview = false;
             
@@ -4561,6 +4654,74 @@ function handlePointerUp(e) {
             if (e.shiftKey) [ex, ey] = constrainShape(shapeStartX, shapeStartY, ex, ey);
             sctx.clearRect(0, 0, strokeCanvas.width, strokeCanvas.height);
             drawShapeOnCtx(sctx, shapeStartX, shapeStartY, ex, ey);
+
+            let isModifiable = false;
+            if (currentBrush.shapeType === 'rect') isModifiable = shapeModifiableRect;
+            else if (currentBrush.shapeType === 'ellipse') isModifiable = shapeModifiableCircle;
+            else if (currentBrush.shapeType === 'line') isModifiable = shapeModifiableLine;
+
+            if (isModifiable) {
+                let minX, minY, maxX, maxY;
+                if (currentBrush.shapeType === 'line') {
+                    minX = Math.min(shapeStartX, ex); maxX = Math.max(shapeStartX, ex);
+                    minY = Math.min(shapeStartY, ey); maxY = Math.max(shapeStartY, ey);
+                } else if (currentBrush.shapeType === 'rect') {
+                    if (shapeFromCenterRect) {
+                        const rw = Math.abs(ex - shapeStartX) * 2;
+                        const rh = Math.abs(ey - shapeStartY) * 2;
+                        minX = shapeStartX - rw / 2; maxX = shapeStartX + rw / 2;
+                        minY = shapeStartY - rh / 2; maxY = shapeStartY + rh / 2;
+                    } else {
+                        minX = Math.min(shapeStartX, ex); maxX = Math.max(shapeStartX, ex);
+                        minY = Math.min(shapeStartY, ey); maxY = Math.max(shapeStartY, ey);
+                    }
+                } else if (currentBrush.shapeType === 'ellipse') {
+                    if (shapeFromCenterCircle) {
+                        const rx = Math.max(1, Math.abs(ex - shapeStartX));
+                        const ry = Math.max(1, Math.abs(ey - shapeStartY));
+                        minX = shapeStartX - rx; maxX = shapeStartX + rx;
+                        minY = shapeStartY - ry; maxY = shapeStartY + ry;
+                    } else {
+                        const cx = (shapeStartX + ex) / 2; cy = (shapeStartY + ey) / 2;
+                        const rx = Math.max(1, Math.abs(ex - shapeStartX) / 2);
+                        const ry = Math.max(1, Math.abs(ey - shapeStartY) / 2);
+                        minX = cx - rx; maxX = cx + rx;
+                        minY = cy - ry; maxY = cy + ry;
+                    }
+                }
+
+                const pad = Math.max(1, baseBrushSize) * 2 + 5;
+                minX -= pad; minY -= pad; maxX += pad; maxY += pad;
+                const w = maxX - minX;
+                const h = maxY - minY;
+
+                if (w > 0 && h > 0) {
+                    modSelCanvas = document.createElement('canvas');
+                    modSelCanvas.width = w; modSelCanvas.height = h;
+                    modSelCtx = modSelCanvas.getContext('2d');
+                    modSelCtx.globalAlpha = brushOpacity;
+                    modSelCtx.save();
+                    modSelCtx.translate(-minX, -minY);
+                    drawShapeOnCtx(modSelCtx, shapeStartX, shapeStartY, ex, ey);
+                    modSelCtx.restore();
+                    sctx.clearRect(0, 0, strokeCanvas.width, strokeCanvas.height);
+
+                    modSelBounds = { x: minX, y: minY, w, h };
+                    modSelOrigBounds = { ...modSelBounds };
+                    modSelRotation = 0;
+                    modSelFlipX = 1; modSelFlipY = 1;
+                    
+                    isImportingNewImage = true;
+                    isModifyingShape = true;
+                    modSelInitialized = true;
+                    
+                    selectTool('modify-sel', 'Modificar Selección');
+                    updateThumbnails(); updateLayersUI();
+                    
+                    isDrawing = false;
+                    return;
+                }
+            }
 
             // Commit to layer
             const l = layers[selectedLayerIndex];
@@ -4712,10 +4873,20 @@ function drawPoint(x, y, pressure) {
     // Pressure: sensitivity 0-2.0, scaled so at 2.0 range is ~0% to 300% of base size
     const minScale = Math.max(0.01, 1.0 - (0.9 * pressureSensitivity));
     const maxScale = 1.0 + (1.5 * pressureSensitivity);
-    let size = baseBrushSize * (minScale + pressure * (maxScale - minScale));
+    
+    // Apply an exponential curve so light pressure stays thin, and hard pressure grows rapidly
+    const curvedPressure = Math.pow(pressure, 2.5);
+    
+    let size = baseBrushSize * (minScale + curvedPressure * (maxScale - minScale));
+    let localOpacity = brushOpacity;
+
+    if (currentBrush.isGaussBlur) {
+        size = baseBrushSize;
+        localOpacity = brushOpacity;
+    }
 
     // Velocity size modulation
-    if (velocitySensitivity > 0) {
+    if (velocitySensitivity > 0 && !currentBrush.isGaussBlur) {
         // Sqrt curve: smooth transitions, avoids harsh jumps at low speeds
         const normalised = Math.min(1.0, Math.sqrt(lastPointerSpeed / 2.5));
         // 'slow' mode: slow→thick (default). 'fast' mode: fast→thick (inverted)
@@ -4766,7 +4937,7 @@ function drawPoint(x, y, pressure) {
 
         // Apply brush opacity to the mask itself
         brushMaskCtx.globalCompositeOperation = 'destination-in';
-        brushMaskCtx.fillStyle = `rgba(255, 255, 255, ${brushOpacity})`;
+        brushMaskCtx.fillStyle = `rgba(255, 255, 255, ${localOpacity})`;
         brushMaskCtx.fillRect(0, 0, side, side);
         brushMaskCtx.globalCompositeOperation = 'source-over';
 
@@ -4814,7 +4985,7 @@ function drawPoint(x, y, pressure) {
 
         // Apply brush opacity to mask
         brushMaskCtx.globalCompositeOperation = 'destination-in';
-        brushMaskCtx.fillStyle = `rgba(255, 255, 255, ${brushOpacity})`;
+        brushMaskCtx.fillStyle = `rgba(255, 255, 255, ${localOpacity})`;
         brushMaskCtx.fillRect(0, 0, side, side);
         brushMaskCtx.globalCompositeOperation = 'source-over';
 
@@ -4862,7 +5033,7 @@ function drawPoint(x, y, pressure) {
 
         // Apply brush opacity to mask
         brushMaskCtx.globalCompositeOperation = 'destination-in';
-        brushMaskCtx.fillStyle = `rgba(255, 255, 255, ${brushOpacity})`;
+        brushMaskCtx.fillStyle = `rgba(255, 255, 255, ${localOpacity})`;
         brushMaskCtx.fillRect(0, 0, side, side);
         brushMaskCtx.globalCompositeOperation = 'source-over';
 
@@ -4904,7 +5075,7 @@ function drawPoint(x, y, pressure) {
             ctx.save();
             if (currentBrush.isEraser && !currentBrush.useCompositing && !isPostStrokePreview) ctx.globalCompositeOperation = 'destination-out';
             else if (!currentBrush.useCompositing && l.alphaLocked && !isPostStrokePreview) ctx.globalCompositeOperation = 'source-atop';
-            if (!currentBrush.useCompositing) ctx.globalAlpha = brushOpacity;
+            if (!currentBrush.useCompositing) ctx.globalAlpha = localOpacity;
             else ctx.globalAlpha = 1.0;
             ctx.fillStyle = selectedColor;
             ctx.beginPath();
@@ -4918,7 +5089,7 @@ function drawPoint(x, y, pressure) {
             ctx.save(); 
             if (currentBrush.isEraser && !currentBrush.useCompositing && !isPostStrokePreview) ctx.globalCompositeOperation = 'destination-out'; 
             else if (l.alphaLocked && !isPostStrokePreview) ctx.globalCompositeOperation = 'source-atop'; 
-            renderStamp(ctx, x, y, size, brushOpacity * 0.4); 
+            renderStamp(ctx, x, y, size, localOpacity * 0.4); 
             ctx.restore(); 
         }
     }
@@ -5188,9 +5359,10 @@ function drawStabLineTo(sx, sy, sp, ex, ey, ep) {
     
     if (isHardSolid) {
         const avgPressure = (sp + ep) / 2;
+        const curvedPressure = Math.pow(avgPressure, 2.5);
         const minScale = Math.max(0.01, 1.0 - (0.9 * pressureSensitivity));
         const maxScale = 1.0 + (1.5 * pressureSensitivity);
-        let size = baseBrushSize * (minScale + avgPressure * (maxScale - minScale));
+        let size = baseBrushSize * (minScale + curvedPressure * (maxScale - minScale));
         // Velocity size modulation
         if (velocitySensitivity > 0) {
             const normalised = Math.min(1.0, Math.sqrt(lastPointerSpeed / 2.5));
@@ -5662,9 +5834,16 @@ function resetRotation() {
 
 /** Sync the UI sliders/labels to match the current brush's stored values */
 function syncBrushUI() {
-    baseBrushSize = currentBrush.size;
-    brushOpacity = currentBrush.opacity;
-    currentBlur = currentBrush.blur;
+    if (currentTool === 'bucket') {
+        const t = toolsData.find(x => x.id === 'bucket');
+        if (t) brushOpacity = t.opacity !== undefined ? t.opacity : 1.0;
+        baseBrushSize = currentBrush.size;
+        currentBlur = currentBrush.blur;
+    } else {
+        baseBrushSize = currentBrush.size;
+        brushOpacity = currentBrush.opacity;
+        currentBlur = currentBrush.blur;
+    }
 
     if (currentTool === 'push') {
         sizeSlider.min = 0;
@@ -5852,11 +6031,34 @@ function handleGlobalShortcuts(e) {
     if (key === cfs && cfs !== '') { toggleMenu(configMenu); return; }
 
     if (e.ctrlKey && key === 'c') { e.preventDefault(); copyToClipboard(); return; }
+    if (e.ctrlKey && key === 'x') { e.preventDefault(); cutToClipboard(); return; }
+    if (e.ctrlKey && e.altKey && key === 'v') {
+        if (startupImportState === 1 || layerImportState === 1) return;
+        e.preventDefault(); pasteFromClipboard(true); return; 
+    }
     if (e.ctrlKey && key === 'v') {
         if (startupImportState === 1 || layerImportState === 1) return; // Let the window 'paste' listener handle it
-        e.preventDefault(); pasteFromClipboard(); return;
+        e.preventDefault(); pasteFromClipboard(false); return;
     }
-    if (e.ctrlKey && (key === 'z')) { e.preventDefault(); undo(); return; }
+    if (e.ctrlKey && (key === 'z') && !e.shiftKey) { 
+        e.preventDefault(); 
+        if (isModifyingShape) {
+            isModifyingShape = false;
+            modSelInitialized = false; 
+            modSelCanvas = null; 
+            modSelBounds = null; 
+            modSelOrigBounds = null;
+            modSelRotation = 0; modSelFlipX = 1; modSelFlipY = 1;
+            modSelLayersData = [];
+            if (flipControls) flipControls.classList.add('hidden');
+            selectTool('pincel', 'Pincel');
+            updateThumbnails(); updateLayersUI();
+            requestRender();
+            return;
+        }
+        undo(); 
+        return; 
+    }
     if (e.ctrlKey && (key === 'y' || (e.shiftKey && key === 'z'))) { e.preventDefault(); redo(); return; }
 
     if (e.key === 'Enter' || e.key === 'Escape') {
