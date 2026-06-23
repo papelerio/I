@@ -381,6 +381,14 @@
 
                 <button id="reset-rotation-btn" class="hidden">Rotación original</button>
             </div>
+            <div id="layer-status-indicator" style="position: absolute; top: 20px; right: 20px; background: rgba(255, 255, 255, 0.7); backdrop-filter: blur(5px); color: #333; padding: 5px 15px; border-radius: 20px; font-size: 13px; font-weight: bold; z-index: 50; pointer-events: none; box-shadow: 0 2px 10px rgba(0,0,0,0.1); display: flex; gap: 8px;">
+                <span id="layer-status-pos"></span><span id="layer-status-name" style="color: #00aa00;"></span>
+            </div>
+            <div id="layer-quick-btns" style="position: absolute; top: 60px; right: 20px; z-index: 50; display: flex; flex-direction: column; gap: 5px; align-items: flex-end;">
+                <button id="qbtn-alpha" title="Bloqueo Alpha" style="background: rgba(255,255,255,0.4); backdrop-filter: blur(5px); border: 1px solid rgba(255,255,255,0.5); color: #333; padding: 3px 10px; border-radius: 12px; font-size: 10px; font-weight: bold; cursor: pointer; transition: all 0.2s; white-space: nowrap;">&#945; Alpha</button>
+                <button id="qbtn-clip" title="Máscara de Recorte" style="background: rgba(255,255,255,0.4); backdrop-filter: blur(5px); border: 1px solid rgba(255,255,255,0.5); color: #333; padding: 3px 10px; border-radius: 12px; font-size: 10px; font-weight: bold; cursor: pointer; transition: all 0.2s; white-space: nowrap;">&#9988; Recorte</button>
+                <button id="qbtn-merge" title="Combinar con la de abajo" style="background: rgba(255,255,255,0.4); backdrop-filter: blur(5px); border: 1px solid rgba(255,255,255,0.5); color: #333; padding: 3px 10px; border-radius: 12px; font-size: 10px; font-weight: bold; cursor: pointer; transition: all 0.2s; white-space: nowrap;">&#8609; Combinar</button>
+            </div>
             <div id="bottom-sliders-wrapper" style="position: absolute; bottom: 20px; left: 20px; display: flex; gap: 15px; z-index: 101; align-items: flex-end;">
                 <div style="display: flex; flex-direction: column; gap: 10px;">
                     <div class="floating-slider-panel hidden" id="blur-settings-container">
@@ -421,6 +429,7 @@
             <div id="eyedropper-preview" class="hidden">
                 <div class="color-circle"></div>
                 <div class="color-hex">#000000</div>
+                <button id="eyedropper-mode-btn" title="Cambiar modo del gotero" style="pointer-events:auto; background:rgba(0,0,0,0.55); border:1px solid rgba(255,255,255,0.3); color:#fff; border-radius:8px; font-size:9px; font-weight:700; padding:2px 8px; cursor:pointer; margin-top:-2px; letter-spacing:0.03em; transition:background 0.2s;">📷 Captura</button>
             </div>
             <div id="flip-controls" class="floating-flip-container hidden">
                 <button class="floating-flip-btn" id="flip-h-btn" title="Voltear Horizontalmente">

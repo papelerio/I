@@ -229,6 +229,9 @@ let rotationPivot = null;
 
 // Stabilizer state
 let stabEnabled = 3;
+let globalLayerCounter = 1;
+let eyedropperMode = 'captura'; // 'captura' | 'original'
+let newLayerShortcut = '*';
 let pressureSensitivity = 0.6;
 let velocitySensitivity = 0.0;   // 0 = off, 1 = full
 let velocityMode = 'slow';        // 'slow' = slow→thick, 'fast' = fast→thick
@@ -952,7 +955,62 @@ function init() {
     document.addEventListener('keyup', handleKeyUp);
 
 
-    document.getElementById('new-layer-btn').onclick = () => addLayer("Nueva Capa");
+    const newLayerBtn = document.getElementById('new-layer-btn');
+    newLayerBtn.onclick = () => addLayer("Nueva Capa");
+    newLayerBtn.addEventListener('contextmenu', (e) => {
+        e.preventDefault();
+        const k = prompt('Ingresa 1 tecla para el atajo "Nueva Capa", o deja vacío para eliminar:', newLayerShortcut);
+        if (k !== null) {
+            newLayerShortcut = k.toLowerCase().substring(0, 1);
+            saveShortcuts();
+        }
+    });
+
+    // Quick layer action buttons
+    const qAlpha = document.getElementById('qbtn-alpha');
+    const qClip  = document.getElementById('qbtn-clip');
+    const qMerge = document.getElementById('qbtn-merge');
+    const ACTIVE_STYLE  = 'background: rgba(0,200,80,0.75); border-color: #00cc44; color: #fff;';
+    const IDLE_STYLE    = 'background: rgba(255,255,255,0.4); backdrop-filter:blur(5px); border: 1px solid rgba(255,255,255,0.5); color: #333;';
+
+    if (qAlpha) {
+        qAlpha.addEventListener('pointerdown', (e) => {
+            e.stopPropagation();
+            const l = layers[selectedLayerIndex];
+            if (!l) return;
+            l.alphaLocked = !l.alphaLocked;
+            updateLayersUI(); pushHistory();
+        });
+    }
+    if (qClip) {
+        qClip.addEventListener('pointerdown', (e) => {
+            e.stopPropagation();
+            const l = layers[selectedLayerIndex];
+            if (!l) return;
+            l.clippingMask = !l.clippingMask;
+            layersCacheDirty = true;
+            updateLayersUI(); pushHistory(); requestRender();
+        });
+    }
+    if (qMerge) {
+        qMerge.addEventListener('pointerdown', (e) => {
+            e.stopPropagation();
+            if (selectedLayerIndex <= 0) return;
+            // Flash green briefly
+            qMerge.style.cssText += ACTIVE_STYLE;
+            setTimeout(() => { if (qMerge) qMerge.style.cssText = IDLE_STYLE + ' padding:3px 10px; border-radius:12px; font-size:10px; font-weight:bold; cursor:pointer; transition:all 0.2s; white-space:nowrap;'; }, 400);
+            mergeLayerDown(selectedLayerIndex);
+            updateThumbnails(); updateLayersUI();
+        });
+    }
+    window._syncQuickLayerBtns = function() {
+        const l = layers[selectedLayerIndex];
+        if (!l) return;
+        const BASE = 'padding:3px 10px; border-radius:12px; font-size:10px; font-weight:bold; cursor:pointer; transition:all 0.2s; white-space:nowrap; backdrop-filter:blur(5px);';
+        if (qAlpha) qAlpha.style.cssText = BASE + (l.alphaLocked ? ACTIVE_STYLE : IDLE_STYLE);
+        if (qClip)  qClip.style.cssText  = BASE + (l.clippingMask ? ACTIVE_STYLE : IDLE_STYLE);
+        if (qMerge) qMerge.style.cssText = BASE + IDLE_STYLE;
+    };
     document.getElementById('duplicate-layer-btn').onclick = duplicateSelectedLayer;
     document.getElementById('import-layer-btn').onclick = () => {
         if (layerImportState === 0) {
@@ -3658,6 +3716,19 @@ function checkAndShrinkPalette() {
 //  LAYERS
 // ─────────────────────────────────────────────────────────────
 function addLayer(name, fromCanvas = false) {
+    if (name === "Nueva Capa" || name === "Capa 1") {
+        let max = 0;
+        for (const l of layers) {
+            const m = l.name.match(/^Capa (\d+)$/i);
+            if (m) {
+                const num = parseInt(m[1], 10);
+                if (num > max) max = num;
+            }
+        }
+        if (globalLayerCounter <= max) globalLayerCounter = max + 1;
+        name = "Capa " + globalLayerCounter;
+        globalLayerCounter++;
+    }
     endPushSession();
     const lCanvas = document.createElement('canvas'); lCanvas.width = paperWidth; lCanvas.height = paperHeight;
     const lCtx = lCanvas.getContext('2d', { willReadFrequently: true });
@@ -3811,6 +3882,15 @@ function updateThumbnails() {
 
 function updateLayersUI() {
     if (!layersList) return;
+
+    const posSpan = document.getElementById('layer-status-pos');
+    const nameSpan = document.getElementById('layer-status-name');
+    if (posSpan && nameSpan && layers[selectedLayerIndex]) {
+        posSpan.textContent = `${selectedLayerIndex + 1}/${layers.length}`;
+        nameSpan.textContent = layers[selectedLayerIndex].name;
+    }
+    if (window._syncQuickLayerBtns) window._syncQuickLayerBtns();
+
     layersList.innerHTML = '';
     for (let i = layers.length - 1; i >= 0; i--) {
         const l = layers[i];
@@ -4756,7 +4836,9 @@ function handlePointerUp(e) {
 
     else if (currentTool === 'eyedropper') {
         const world = screenToWorld(e.offsetX, e.offsetY);
-        const color = pickColorAt(world.x, world.y);
+        const color = eyedropperMode === 'original'
+            ? pickColorRaw(world.x, world.y)
+            : pickColorAt(world.x, world.y);
         if (color) {
             selectedColor = color;
             mainColorPicker.value = color;
@@ -5933,6 +6015,18 @@ function selectTool(id, name) {
 
     if (id === 'eyedropper') {
         eyedropperPreview?.classList.remove('hidden');
+        // Wire toggle button (only once)
+        const modeBtn = document.getElementById('eyedropper-mode-btn');
+        if (modeBtn && !modeBtn._wired) {
+            modeBtn._wired = true;
+            modeBtn.addEventListener('pointerdown', (ev) => {
+                ev.stopPropagation();
+                eyedropperMode = eyedropperMode === 'captura' ? 'original' : 'captura';
+                modeBtn.textContent = eyedropperMode === 'original' ? '🎨 Original' : '📷 Captura';
+                modeBtn.style.background = eyedropperMode === 'original'
+                    ? 'rgba(0,180,80,0.75)' : 'rgba(0,0,0,0.55)';
+            });
+        }
     } else {
         eyedropperPreview?.classList.add('hidden');
     }
@@ -5973,16 +6067,50 @@ function pickColorAt(worldX, worldY) {
     return rgbToHex(data[0], data[1], data[2]);
 }
 
+/**
+ * Mode 2: Read raw pixel from the most relevant layer, ignoring blend modes.
+ * Priority: active layer first, then search top-to-bottom for any visible layer with an opaque pixel.
+ * Falls back to background color if all are transparent.
+ */
+function pickColorRaw(worldX, worldY) {
+    const px = Math.floor(worldX); const py = Math.floor(worldY);
+    if (px < 0 || px >= paperWidth || py < 0 || py >= paperHeight) return null;
+
+    const byteIndex = (py * paperWidth + px) * 4;
+
+    // 1. Try active layer first
+    const active = layers[selectedLayerIndex];
+    if (active && active.visible) {
+        const d = active.ctx.getImageData(px, py, 1, 1).data;
+        if (d[3] > 0) return rgbToHex(d[0], d[1], d[2]);
+    }
+
+    // 2. Search layers top-to-bottom (excluding active, already tried)
+    for (let i = layers.length - 1; i >= 0; i--) {
+        if (i === selectedLayerIndex) continue;
+        const l = layers[i];
+        if (!l.visible) continue;
+        const d = l.ctx.getImageData(px, py, 1, 1).data;
+        if (d[3] > 0) return rgbToHex(d[0], d[1], d[2]);
+    }
+
+    // 3. No layer has a pixel here — return background
+    if (bgMode === 1) return solidBgColor;
+    return '#ffffff';
+}
+
 function updateEyedropperPreview(screenX, screenY, worldX, worldY) {
     if (!eyedropperPreview || eyedropperPreview.classList.contains('copied')) return;
     eyedropperPreview.style.left = screenX + 'px';
-    eyedropperPreview.style.top = screenY + 'px';
+    eyedropperPreview.style.top  = screenY + 'px';
 
-    const color = pickColorAt(worldX, worldY) || '#000000';
+    const color = (eyedropperMode === 'original' ? pickColorRaw(worldX, worldY) : pickColorAt(worldX, worldY)) || '#000000';
     const circle = eyedropperPreview.querySelector('.color-circle');
-    const hex = eyedropperPreview.querySelector('.color-hex');
+    const hex    = eyedropperPreview.querySelector('.color-hex');
+    const modeEl = eyedropperPreview.querySelector('.ed-mode-label');
     if (circle) circle.style.background = color;
-    if (hex) hex.textContent = color;
+    if (hex)    hex.textContent = color;
+    if (modeEl) modeEl.textContent = eyedropperMode === 'original' ? '🎨 Original' : '📷 Captura';
 }
 
 
@@ -6018,11 +6146,32 @@ function handleGlobalShortcuts(e) {
         if (key !== 'z' && key !== 'x') return;
     }
 
+    if (!activeFilterType && !isModifyingShape && layerImportState === 0) {
+        if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+            e.preventDefault();
+            if (layers.length > 1) {
+                endPushSession();
+                if (e.key === 'ArrowUp') {
+                    selectedLayerIndex = (selectedLayerIndex + 1) % layers.length;
+                } else {
+                    selectedLayerIndex = (selectedLayerIndex - 1 + layers.length) % layers.length;
+                }
+                updateLayersUI();
+                pushHistory();
+                requestRender();
+            }
+            return;
+        }
+    }
+
     const ms = (mainShortcutInput?.value || '').toLowerCase();
     const bs = (brushShortcutInput?.value || '').toLowerCase();
     const ls = (layersShortcutInput?.value || '').toLowerCase();
     const cs = (colorsShortcutInput?.value || '').toLowerCase();
     const cfs = (configShortcutInput?.value || '').toLowerCase();
+    const nls = (newLayerShortcut || '').toLowerCase();
+
+    if (key === nls && nls !== '') { addLayer("Nueva Capa"); return; }
 
     if (key === ms && ms !== '') { toggleMenu(multiToolMenu); return; }
     if (key === bs && bs !== '') { toggleMenu(brushTypeMenu); return; }
@@ -6201,6 +6350,7 @@ function saveShortcuts() {
         main: mainShortcutInput?.value || '', brushMenu: brushShortcutInput?.value || '',
         layersMenu: layersShortcutInput?.value || '', colorsMenu: colorsShortcutInput?.value || '',
         config: configShortcutInput?.value || '',
+        newLayer: newLayerShortcut,
         tools: toolsData.map(t => ({ id: t.id, shortcut: t.shortcut, modifier: t.modifier || 'normal' })),
         brushes: brushTypesData.map(b => ({ id: b.id, shortcut: b.shortcut, modifier: b.modifier || 'normal' }))
     }));
@@ -6214,6 +6364,7 @@ function loadShortcuts() {
         if (layersShortcutInput) layersShortcutInput.value = s.layersMenu || '.';
         if (colorsShortcutInput) colorsShortcutInput.value = s.colorsMenu || '-';
         if (configShortcutInput) configShortcutInput.value = s.config || '{';
+        newLayerShortcut = s.newLayer !== undefined ? s.newLayer : '*';
         s.tools?.forEach(st => { const t = toolsData.find(x => x.id === st.id); if (t) { t.shortcut = st.shortcut || t.shortcut; t.modifier = st.modifier || 'normal'; } });
         s.brushes?.forEach(sb => { const b = brushTypesData.find(x => x.id === sb.id); if (b) { b.shortcut = sb.shortcut || b.shortcut; b.modifier = sb.modifier || 'normal'; } });
     } catch (e) { }
