@@ -12,14 +12,66 @@
 </head>
 
 <body>
+    <!-- Proyecto Galería -->
+    <div id="gallery-screen" class="gallery-overlay">
+        <header class="gallery-header">
+            <button id="gallery-back-btn" class="gallery-back-btn hidden">&lt; Back</button>
+            <span id="gallery-title" class="gallery-title">MI GALERÍA (0)</span>
+        </header>
+        
+        <main class="gallery-content">
+            <!-- Grid View -->
+            <div id="gallery-grid" class="gallery-grid">
+                <!-- Thumbnail items will be dynamically generated -->
+            </div>
+            
+            <!-- Detail View -->
+            <div id="gallery-detail" class="gallery-detail hidden">
+                <div class="detail-img-container">
+                    <img id="detail-img" src="" alt="Vista previa">
+                </div>
+                <div class="detail-info">
+                    <div class="detail-row-top">
+                        <div class="detail-title-container">
+                            <span class="detail-label-inline">Título: </span>
+                            <span id="detail-title" class="detail-value">mi obra</span>
+                            <button id="detail-rename-btn" class="detail-rename-btn" title="Renombrar">✏️</button>
+                        </div>
+                        <div>
+                            <span class="detail-label-inline">Capas: </span>
+                            <span id="detail-layers-count" class="detail-value">0</span>
+                        </div>
+                    </div>
+                    <div class="detail-row-bottom">
+                        <div class="detail-meta">TAMAÑO: <span id="detail-size">0 x 0</span></div>
+                        <div class="detail-meta">TIEMPO: <span id="detail-time">00:00:00</span></div>
+                    </div>
+                    <button class="gallery-delete-btn" id="detail-delete-btn">ELIMINAR OBRA</button>
+                </div>
+            </div>
+        </main>
+        
+        <footer class="gallery-footer">
+            <button id="gallery-add-btn" title="Nuevo Proyecto">
+                <img src="imagenes/cruz.png" alt="Nuevo">
+            </button>
+            <button id="gallery-edit-btn" disabled>
+                <img src="imagenes/EDITAR.png" alt="Editar">
+                <span>EDITAR</span>
+            </button>
+        </footer>
+    </div>
+
     <!-- Menú Inicial de Configuración -->
-    <div id="startup-modal" class="modal-overlay">
+    <div id="startup-modal" class="modal-overlay" style="display: none;">
         <div class="modal-content">
             <h1>Bienvenido a Pro Illustrator</h1>
             <p>Configura tu espacio de trabajo</p>
             <div class="input-field" style="margin-bottom: 15px; text-align: left;">
-                <label style="display: block; margin-bottom: 5px; font-size: 14px; color: #ccc;">Plantillas de Tamaño</label>
-                <select id="canvas-preset-select" style="width: 100%; padding: 8px; border-radius: 5px; background: #222; color: white; border: 1px solid #444; outline: none; cursor: pointer;">
+                <label style="display: block; margin-bottom: 5px; font-size: 14px; color: #ccc;">Plantillas de
+                    Tamaño</label>
+                <select id="canvas-preset-select"
+                    style="width: 100%; padding: 8px; border-radius: 5px; background: #222; color: white; border: 1px solid #444; outline: none; cursor: pointer;">
                     <option value="1920x1080">Full HD (1920 x 1080)</option>
                     <option value="1280x720">HD (1280 x 720)</option>
                     <option value="1080x1080">Cuadrado / IG (1080 x 1080)</option>
@@ -35,7 +87,8 @@
                     <label>Ancho (px)</label>
                     <input type="number" id="canvas-width" value="1920">
                 </div>
-                <button id="swap-dimensions-btn" title="Intercambiar Orientación (Horizontal/Vertical)" style="background: #333; border: 1px solid #555; color: white; border-radius: 5px; cursor: pointer; padding: 0 15px; height: 42px; font-size: 20px; display: flex; align-items: center; justify-content: center; transition: background 0.2s;">
+                <button id="swap-dimensions-btn" title="Intercambiar Orientación (Horizontal/Vertical)"
+                    style="background: #333; border: 1px solid #555; color: white; border-radius: 5px; cursor: pointer; padding: 0 15px; height: 42px; font-size: 20px; display: flex; align-items: center; justify-content: center; transition: background 0.2s;">
                     ⇄
                 </button>
                 <div class="input-field">
@@ -105,20 +158,21 @@
         <aside class="sidebar">
             <div class="sidebar-icons">
                 <button class="tool-btn" id="btn-config" title="Configuración (S)">
-                    <img src="simbolo engranaje.png" alt="Configuración">
+                    <img src="imagenes/simbolo engranaje.png" alt="Configuración">
                 </button>
 
                 <div class="opacity-settings">
                     <div class="size-slider-wrapper">
                         <div class="slider-container vertical tertiary">
-                            <img src="simbolo ojo abierto.png" class="mini-icon" id="eye-icon">
+                            <img src="imagenes/simbolo ojo abierto.png" class="mini-icon" id="eye-icon">
                             <span id="opacity-value">100%</span>
                             <input type="range" id="brush-opacity" min="1" max="100" value="100" orient="vertical">
                         </div>
                         <!-- Opacity preset tab -->
                         <div class="size-preset-tab" id="opacity-preset-tab">
                             <svg width="8" height="14" viewBox="0 0 8 14" fill="none">
-                                <path d="M1 1L7 7L1 13" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                                <path d="M1 1L7 7L1 13" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                                    stroke-linejoin="round" />
                             </svg>
                         </div>
                         <!-- Opacity preset popup -->
@@ -132,14 +186,16 @@
                 <div class="brush-settings">
                     <div class="size-slider-wrapper">
                         <div class="slider-container vertical">
-                            <img src="simbolo de tamaño.png" class="mini-icon">
+                            <img src="imagenes/simbolo de tamaño.png" class="mini-icon">
                             <span id="size-value">12</span>
-                            <input type="range" id="brush-size" min="0.1" max="100" step="0.1" value="12" orient="vertical">
+                            <input type="range" id="brush-size" min="0.1" max="100" step="0.1" value="12"
+                                orient="vertical">
                         </div>
                         <!-- Size preset tab -->
                         <div class="size-preset-tab" id="size-preset-tab">
                             <svg width="8" height="14" viewBox="0 0 8 14" fill="none">
-                                <path d="M1 1L7 7L1 13" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                                <path d="M1 1L7 7L1 13" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                                    stroke-linejoin="round" />
                             </svg>
                         </div>
                         <!-- Size preset popup (inside wrapper = no dead zone) -->
@@ -152,7 +208,7 @@
 
 
                 <button class="tool-btn active" id="btn-brush" title="Pincel">
-                    <img src="simbolo pincel.png" alt="Pincel">
+                    <img src="imagenes/simbolo pincel.png" alt="Pincel">
                 </button>
 
                 <!-- Brush Type Menu (Floating) -->
@@ -167,7 +223,9 @@
                 </div>
 
                 <button class="tool-btn" id="btn-colors" title="Colores">
-                    <div id="color-preview-btn-indicator" style="width: 24px; height: 24px; border-radius: 6px; border: 2px solid rgba(255,255,255,0.8); background-color: #000000; box-shadow: inset 0 0 0 1px rgba(0,0,0,0.5);"></div>
+                    <div id="color-preview-btn-indicator"
+                        style="width: 24px; height: 24px; border-radius: 6px; border: 2px solid rgba(255,255,255,0.8); background-color: #000000; box-shadow: inset 0 0 0 1px rgba(0,0,0,0.5);">
+                    </div>
                 </button>
 
                 <!-- Menú de Colores -->
@@ -187,7 +245,7 @@
                     </div>
                 </div>
                 <button class="tool-btn" id="btn-filters" title="Filtros">
-                    <img src="simbolo FILTROS.png" alt="Filtros">
+                    <img src="imagenes/simbolo FILTROS.png" alt="Filtros">
                 </button>
 
                 <!-- Menú de Filtros -->
@@ -242,7 +300,7 @@
                     </div>
                 </div>
                 <button class="tool-btn" id="btn-multi" title="Multiherramienta">
-                    <img src="simbolo multiherramientas.png" alt="Multiherramienta">
+                    <img src="imagenes/simbolo multiherramientas.png" alt="Multiherramienta">
                 </button>
 
                 <!-- Multi-Tool Menu (Floating) -->
@@ -284,9 +342,9 @@
                         <button class="layer-action-icon-btn" id="move-layer-btn" title="Mover contenido de capa">
                             <img src="iconos acciones de capas/Mover capa.png" alt="Mover capa">
                         </button>
-                        <button class="layer-action-icon-btn" id="toggle-bg-btn" title="Fondo sólido (Click derecho para color)">
-                            <img id="toggle-bg-icon" src="iconos acciones de capas/modo 1.png"
-                                alt="Fondo transparente">
+                        <button class="layer-action-icon-btn" id="toggle-bg-btn"
+                            title="Fondo sólido (Click derecho para color)">
+                            <img id="toggle-bg-icon" src="iconos acciones de capas/modo 1.png" alt="Fondo transparente">
                         </button>
                     </div>
                     <div class="menu-scroll-area">
@@ -301,11 +359,11 @@
                                     <input type="range" class="layer-opacity-slider" min="0" max="100" value="100">
                                     <div class="layer-buttons">
                                         <button class="mini-tool-btn" title="Visible"><img
-                                                src="simbolo ojo abierto.png"></button>
+                                                src="imagenes/simbolo ojo abierto.png"></button>
                                         <button class="mini-tool-btn" title="Configurar"><img
-                                                src="simbolo engranaje.png"></button>
+                                                src="imagenes/simbolo engranaje.png"></button>
                                         <button class="mini-tool-btn" title="Bloquear"><img
-                                                src="simbolo multiherramientas.png"></button>
+                                                src="imagenes/simbolo multiherramientas.png"></button>
                                         <button class="mini-tool-btn delete" title="Borrar">×</button>
                                     </div>
                                 </div>
@@ -315,7 +373,7 @@
                 </div>
                 <div class="spacer"></div>
                 <button class="tool-btn" id="btn-main-actions" title="Acciones y Guardado">
-                    <img src="simbolo descargar.png" alt="Acciones">
+                    <img src="imagenes/simbolo descargar.png" alt="Acciones">
                 </button>
             </div>
         </aside>
@@ -326,18 +384,8 @@
             <div class="layers-global-actions">
                 <button id="action-download-png" class="layer-action-btn">Descargar como PNG</button>
                 <button id="action-copy-all" class="layer-action-btn">Copiar imagen al portapapeles</button>
-                <button id="action-show-save-slots" class="layer-action-btn">Guardar / Cargar Progreso</button>
-            </div>
-        </div>
-
-        <!-- Save Slots Submenu -->
-        <div id="save-slots-menu" class="floating-menu hidden" style="width: 680px; bottom: 60px; left: 320px;">
-            <div class="menu-header"><label>Ranuras de Guardado</label></div>
-            <div class="menu-scroll-area" style="max-height: 340px;">
-                <div id="slots-container"
-                    style="display: grid; grid-template-columns: 1fr 1fr 1fr 1fr 1fr; gap: 8px; padding: 10px;">
-                    <!-- Generated by JS -->
-                </div>
+                <button id="action-save-project" class="layer-action-btn">Guardar Proyecto</button>
+                <button id="action-gallery" class="layer-action-btn">Guardar y Salir a Galería</button>
             </div>
         </div>
 
@@ -381,15 +429,24 @@
 
                 <button id="reset-rotation-btn" class="hidden">Rotación original</button>
             </div>
-            <div id="layer-status-indicator" style="position: absolute; top: 20px; right: 20px; background: rgba(255, 255, 255, 0.7); backdrop-filter: blur(5px); color: #333; padding: 5px 15px; border-radius: 20px; font-size: 13px; font-weight: bold; z-index: 50; pointer-events: none; box-shadow: 0 2px 10px rgba(0,0,0,0.1); display: flex; gap: 8px;">
+            <div id="layer-status-indicator"
+                style="position: absolute; top: 20px; right: 20px; background: rgba(255, 255, 255, 0.7); backdrop-filter: blur(5px); color: #333; padding: 5px 15px; border-radius: 20px; font-size: 13px; font-weight: bold; z-index: 50; pointer-events: none; box-shadow: 0 2px 10px rgba(0,0,0,0.1); display: flex; gap: 8px;">
                 <span id="layer-status-pos"></span><span id="layer-status-name" style="color: #00aa00;"></span>
             </div>
-            <div id="layer-quick-btns" style="position: absolute; top: 60px; right: 20px; z-index: 50; display: flex; flex-direction: column; gap: 5px; align-items: flex-end;">
-                <button id="qbtn-alpha" title="Bloqueo Alpha" style="background: rgba(255,255,255,0.4); backdrop-filter: blur(5px); border: 1px solid rgba(255,255,255,0.5); color: #333; padding: 3px 10px; border-radius: 12px; font-size: 10px; font-weight: bold; cursor: pointer; transition: all 0.2s; white-space: nowrap;">&#945; Alpha</button>
-                <button id="qbtn-clip" title="Máscara de Recorte" style="background: rgba(255,255,255,0.4); backdrop-filter: blur(5px); border: 1px solid rgba(255,255,255,0.5); color: #333; padding: 3px 10px; border-radius: 12px; font-size: 10px; font-weight: bold; cursor: pointer; transition: all 0.2s; white-space: nowrap;">&#9988; Recorte</button>
-                <button id="qbtn-merge" title="Combinar con la de abajo" style="background: rgba(255,255,255,0.4); backdrop-filter: blur(5px); border: 1px solid rgba(255,255,255,0.5); color: #333; padding: 3px 10px; border-radius: 12px; font-size: 10px; font-weight: bold; cursor: pointer; transition: all 0.2s; white-space: nowrap;">&#8609; Combinar</button>
+            <div id="layer-quick-btns"
+                style="position: absolute; top: 60px; right: 20px; z-index: 50; display: flex; flex-direction: column; gap: 5px; align-items: flex-end;">
+                <button id="qbtn-alpha" title="Bloqueo Alpha"
+                    style="background: rgba(255,255,255,0.4); backdrop-filter: blur(5px); border: 1px solid rgba(255,255,255,0.5); color: #333; padding: 3px 10px; border-radius: 12px; font-size: 10px; font-weight: bold; cursor: pointer; transition: all 0.2s; white-space: nowrap;">&#945;
+                    Alpha</button>
+                <button id="qbtn-clip" title="Máscara de Recorte"
+                    style="background: rgba(255,255,255,0.4); backdrop-filter: blur(5px); border: 1px solid rgba(255,255,255,0.5); color: #333; padding: 3px 10px; border-radius: 12px; font-size: 10px; font-weight: bold; cursor: pointer; transition: all 0.2s; white-space: nowrap;">&#9988;
+                    Recorte</button>
+                <button id="qbtn-merge" title="Combinar con la de abajo"
+                    style="background: rgba(255,255,255,0.4); backdrop-filter: blur(5px); border: 1px solid rgba(255,255,255,0.5); color: #333; padding: 3px 10px; border-radius: 12px; font-size: 10px; font-weight: bold; cursor: pointer; transition: all 0.2s; white-space: nowrap;">&#8609;
+                    Combinar</button>
             </div>
-            <div id="bottom-sliders-wrapper" style="position: absolute; bottom: 20px; left: 20px; display: flex; gap: 15px; z-index: 101; align-items: flex-end;">
+            <div id="bottom-sliders-wrapper"
+                style="position: absolute; bottom: 20px; left: 20px; display: flex; gap: 15px; z-index: 101; align-items: flex-end;">
                 <div style="display: flex; flex-direction: column; gap: 10px;">
                     <div class="floating-slider-panel hidden" id="blur-settings-container">
                         <div class="floating-slider-header">
@@ -402,13 +459,14 @@
                     <div class="floating-slider-panel">
                         <div class="floating-slider-header">
                             <span>Estabilizador</span>
-                            <button id="stab-mode-btn" title="Cambiar modo de estabilizador" style="background:rgba(255,255,255,0.10);border:1px solid rgba(255,255,255,0.18);border-radius:4px;color:#8cf;font-size:9px;font-weight:700;padding:1px 5px;cursor:pointer;line-height:1.4;letter-spacing:0.04em;">POST</button>
+                            <button id="stab-mode-btn" title="Cambiar modo de estabilizador"
+                                style="background:rgba(255,255,255,0.10);border:1px solid rgba(255,255,255,0.18);border-radius:4px;color:#8cf;font-size:9px;font-weight:700;padding:1px 5px;cursor:pointer;line-height:1.4;letter-spacing:0.04em;">POST</button>
                             <span id="stabilizer-value" class="floating-slider-value">3</span>
                         </div>
                         <input type="range" id="stabilizer-slider" class="floating-slider" min="0" max="15" value="3">
                     </div>
                 </div>
-                
+
                 <div class="floating-slider-panel">
                     <div class="floating-slider-header">
                         <span>Sensibilidad (Presión)</span>
@@ -420,7 +478,8 @@
                 <div class="floating-slider-panel">
                     <div class="floating-slider-header">
                         <span>Velocidad</span>
-                        <button id="velocity-mode-btn" title="Cambiar modo de velocidad" style="background:rgba(255,255,255,0.10);border:1px solid rgba(255,255,255,0.18);border-radius:4px;color:#aaa;font-size:9px;font-weight:700;padding:1px 5px;cursor:pointer;line-height:1.4;letter-spacing:0.04em;">LENTO=+</button>
+                        <button id="velocity-mode-btn" title="Cambiar modo de velocidad"
+                            style="background:rgba(255,255,255,0.10);border:1px solid rgba(255,255,255,0.18);border-radius:4px;color:#aaa;font-size:9px;font-weight:700;padding:1px 5px;cursor:pointer;line-height:1.4;letter-spacing:0.04em;">LENTO=+</button>
                         <span id="velocity-value" class="floating-slider-value">0%</span>
                     </div>
                     <input type="range" id="velocity-slider" class="floating-slider" min="0" max="100" value="0">
@@ -429,7 +488,6 @@
             <div id="eyedropper-preview" class="hidden">
                 <div class="color-circle"></div>
                 <div class="color-hex">#000000</div>
-                <button id="eyedropper-mode-btn" title="Cambiar modo del gotero" style="pointer-events:auto; background:rgba(0,0,0,0.55); border:1px solid rgba(255,255,255,0.3); color:#fff; border-radius:8px; font-size:9px; font-weight:700; padding:2px 8px; cursor:pointer; margin-top:-2px; letter-spacing:0.03em; transition:background 0.2s;">📷 Captura</button>
             </div>
             <div id="flip-controls" class="floating-flip-container hidden">
                 <button class="floating-flip-btn" id="flip-h-btn" title="Voltear Horizontalmente">
@@ -462,7 +520,33 @@
         </div>
     </div>
 
-    <script src="app.js"></script>
+    <!-- ═══════════════════════════════════════════════
+         Módulos de la aplicación (en orden de dependencia)
+         Para editar un sistema específico, abre solo ese archivo.
+         Ver GUIA.md para el índice completo.
+    ═══════════════════════════════════════════════ -->
+    <script src="js/globals.js"></script>
+    <script src="js/history.js"></script>
+    <script src="js/filters.js"></script>
+    <script src="js/canvas-resize-modal.js"></script>
+    <script src="js/save-system.js"></script>
+    <script src="js/selection-ui.js"></script>
+    <script src="js/selection-mask.js"></script>
+    <script src="js/modify-selection.js"></script>
+    <script src="js/clipboard-export.js"></script>
+    <script src="js/canvas-resize-logic.js"></script>
+    <script src="js/canvas-setup.js"></script>
+    <script src="js/palette.js"></script>
+    <script src="js/layers.js"></script>
+    <script src="js/bucket.js"></script>
+    <script src="js/pointer-events.js"></script>
+    <script src="js/brush-drawing.js"></script>
+    <script src="js/push-tool.js"></script>
+    <script src="js/shape-render.js"></script>
+    <script src="js/render.js"></script>
+    <script src="js/tools.js"></script>
+    <script src="js/shortcuts.js"></script>
+    <script src="js/init.js"></script>
 </body>
 
 </html>
