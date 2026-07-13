@@ -1,4 +1,4 @@
-﻿
+
 function handlePointerDown(e) {
     if (e.target !== canvas) return;
     screenCursorX = e.offsetX; screenCursorY = e.offsetY;
@@ -141,8 +141,17 @@ function handlePointerDown(e) {
         }
 
         if (currentBrush.isLasso) {
-            lassoPath.push({ x: world.x, y: world.y });
+            lassoFillStartX = world.x; lassoFillStartY = world.y;
             lassoLastScreenX = e.offsetX; lassoLastScreenY = e.offsetY;
+            if (lassoFillMode === 'libre') {
+                lassoPath = [{ x: world.x, y: world.y }];
+            } else {
+                // Rect mode: start with a degenerate rect at the anchor point
+                lassoPath = [
+                    { x: world.x, y: world.y }, { x: world.x, y: world.y },
+                    { x: world.x, y: world.y }, { x: world.x, y: world.y }
+                ];
+            }
         } else if (currentBrush.isShape) {
             shapeStartX = world.x; shapeStartY = world.y;
             sctx.clearRect(0, 0, strokeCanvas.width, strokeCanvas.height);
@@ -291,13 +300,23 @@ function handlePointerMove(e) {
     else if (currentTool === 'pincel') {
         const [cX, cY] = [world.x, world.y];
         if (currentBrush.isLasso) {
-            // Solo añade punto si el cursor se movió al menos 2px en pantalla (filtra micro-temblores)
-            const dxScr = e.offsetX - (lassoLastScreenX ?? e.offsetX);
-            const dyScr = e.offsetY - (lassoLastScreenY ?? e.offsetY);
-            if (dxScr * dxScr + dyScr * dyScr >= 4) {
-                lassoPath.push({ x: world.x, y: world.y });
-                lassoLastScreenX = e.offsetX;
-                lassoLastScreenY = e.offsetY;
+            if (lassoFillMode === 'rectangulo') {
+                // Rect mode: keep path as exact axis-aligned rect (no smoothing later)
+                lassoPath = [
+                    { x: lassoFillStartX, y: lassoFillStartY },
+                    { x: world.x,         y: lassoFillStartY },
+                    { x: world.x,         y: world.y         },
+                    { x: lassoFillStartX, y: world.y         }
+                ];
+            } else {
+                // Free mode: only add point if cursor moved at least 2px on screen
+                const dxScr = e.offsetX - (lassoLastScreenX ?? e.offsetX);
+                const dyScr = e.offsetY - (lassoLastScreenY ?? e.offsetY);
+                if (dxScr * dxScr + dyScr * dyScr >= 4) {
+                    lassoPath.push({ x: world.x, y: world.y });
+                    lassoLastScreenX = e.offsetX;
+                    lassoLastScreenY = e.offsetY;
+                }
             }
         } else if (currentBrush.isShape) {
             // Live preview: clear strokeCanvas and redraw shape from anchor to cursor
@@ -405,7 +424,29 @@ function handlePointerUp(e) {
             isPostStrokePreview = false;
         }
         if (currentBrush.isLasso) {
-            executeLassoFill();
+            if (lassoFillMode === 'rectangulo') {
+                // Rectangle mode: draw directly with fillRect — pixel-perfect, no path smoothing
+                const l = layers[selectedLayerIndex];
+                const rx = Math.min(lassoFillStartX, lastX);
+                const ry = Math.min(lassoFillStartY, lastY);
+                const rw = Math.abs(lastX - lassoFillStartX);
+                const rh = Math.abs(lastY - lassoFillStartY);
+                if (rw > 0 && rh > 0) {
+                    l.ctx.save();
+                    if (currentBrush.isEraser) {
+                        l.ctx.globalCompositeOperation = 'destination-out';
+                    } else if (l.alphaLocked) {
+                        l.ctx.globalCompositeOperation = 'source-atop';
+                    }
+                    l.ctx.globalAlpha = brushOpacity;
+                    l.ctx.fillStyle = selectedColor;
+                    l.ctx.fillRect(rx, ry, rw, rh);
+                    l.ctx.restore();
+                }
+            } else {
+                executeLassoFill();
+            }
+            lassoPath = [];
             updateThumbnails(); updateLayersUI();
             pushHistory();
         } else if (currentBrush.isShape) {

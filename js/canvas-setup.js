@@ -19,7 +19,7 @@ function startApp(w, h, initialImg = null) {
     
     // Set up new project state
     currentProjectId = 'proj_' + Date.now();
-    currentProjectTitle = prompt('Título del proyecto:', 'Sin título') || 'Sin título';
+    currentProjectTitle = 'Sin título';
     currentProjectTime = 0;
     
     const winW = canvas.parentElement.clientWidth; const winH = canvas.parentElement.clientHeight;

@@ -1,4 +1,7 @@
 function handleGlobalShortcuts(e) {
+    const galleryScreen = document.getElementById('gallery-screen');
+    if (galleryScreen && !galleryScreen.classList.contains('hidden')) return;
+
     if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return;
     const key = e.key.toLowerCase();
 

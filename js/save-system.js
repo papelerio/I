@@ -10,6 +10,8 @@ const getDB = () => new Promise((res, rej) => {
 
 let gallerySelectedProjectId = null;
 let galleryMode = 'grid'; // 'grid' | 'detail'
+let draggedProjectId = null;
+let lastTargetId = null;
 
 function formatTime(seconds) {
     const h = Math.floor(seconds / 3600);
@@ -18,14 +20,88 @@ function formatTime(seconds) {
     return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
 }
 
+/**
+ * FLIP (First, Last, Invert, Play) animation helper to smoothly swap nodes in the grid
+ */
+function flipReorder(parent, draggedEl, targetEl) {
+    const children = Array.from(parent.children);
+    // 1. Get initial screen positions (First)
+    const rects = children.map(child => ({
+        el: child,
+        rect: child.getBoundingClientRect()
+    }));
+
+    // 2. Perform DOM reorder
+    const sourceIdx = children.indexOf(draggedEl);
+    const targetIdx = children.indexOf(targetEl);
+    if (sourceIdx < targetIdx) {
+        parent.insertBefore(draggedEl, targetEl.nextSibling);
+    } else {
+        parent.insertBefore(draggedEl, targetEl);
+    }
+
+    // 3. Measure final positions and animate transitions (Last, Invert, Play)
+    const newChildren = Array.from(parent.children);
+    newChildren.forEach(child => {
+        const old = rects.find(r => r.el === child);
+        if (!old) return;
+        const newRect = child.getBoundingClientRect();
+        const dx = old.rect.left - newRect.left;
+        const dy = old.rect.top - newRect.top;
+
+        if (dx || dy) {
+            child.style.transition = 'none';
+            child.style.transform = `translate(${dx}px, ${dy}px)`;
+            child.offsetHeight; // Force reflow
+            child.style.transition = 'transform 0.25s cubic-bezier(0.25, 0.8, 0.25, 1)';
+            child.style.transform = 'translate(0, 0)';
+
+            // Reset transition styles once finished
+            const onTransitionEnd = () => {
+                child.style.transition = '';
+                child.style.transform = '';
+                child.removeEventListener('transitionend', onTransitionEnd);
+            };
+            child.addEventListener('transitionend', onTransitionEnd);
+        }
+    });
+}
+
 async function saveCurrentProject() {
     if (!currentProjectId) {
         currentProjectId = 'proj_' + Date.now();
     }
     const db = await getDB();
 
+    // If this is a new project, assign it a new order weight placing it at the top
+    if (currentProjectOrder === undefined || currentProjectOrder === null || currentProjectOrder === 0) {
+        const txCheck = db.transaction('slots', 'readonly');
+        const existing = await new Promise(res => txCheck.objectStore('slots').get(currentProjectId).onsuccess = e => res(e.target.result));
+        if (existing && existing.order !== undefined) {
+            currentProjectOrder = existing.order;
+        } else {
+            // Find the lowest order weight among existing projects to put the new one at the very top (lowest order weight = first in ascending sort)
+            const txList = db.transaction('slots', 'readonly');
+            const storeList = txList.objectStore('slots');
+            const projects = [];
+            await new Promise((resolve) => {
+                storeList.openCursor().onsuccess = (event) => {
+                    const cursor = event.target.result;
+                    if (cursor) {
+                        projects.push(cursor.value);
+                        cursor.continue();
+                    } else {
+                        resolve();
+                    }
+                };
+            });
+            const orders = projects.map(p => p.order !== undefined ? p.order : 0);
+            const minOrder = orders.length > 0 ? Math.min(...orders) : 0;
+            currentProjectOrder = minOrder - 1;
+        }
+    }
+
     // Generate thumbnail preserving the real aspect ratio of the canvas
-    // Max 800px on the longest side → good detail quality without huge file
     const MAX_DIM = 800;
     const flat = getFlatImage();
     const ratio = flat.height / flat.width;
@@ -50,6 +126,7 @@ async function saveCurrentProject() {
         id: currentProjectId,
         title: currentProjectTitle,
         time: currentProjectTime,
+        order: currentProjectOrder,
         w: paperWidth, h: paperHeight,
         thumb: thumbDataURL,
         savedAt: Date.now(),
@@ -80,6 +157,7 @@ async function loadProject(id) {
     currentProjectId = project.id || id;
     currentProjectTitle = project.title || "Sin título";
     currentProjectTime = project.time || 0;
+    currentProjectOrder = project.order !== undefined ? project.order : 0;
 
     paperWidth = project.w; paperHeight = project.h;
     setupLogicalCanvas();
@@ -171,8 +249,8 @@ async function renderGallery() {
         };
     });
 
-    // Sort projects by savedAt desc
-    projects.sort((a, b) => (b.savedAt || 0) - (a.savedAt || 0));
+    // Sort projects by order ascending
+    projects.sort((a, b) => (a.order || 0) - (b.order || 0));
 
     // Update Title with Count
     const titleEl = document.getElementById('gallery-title');
@@ -200,9 +278,57 @@ async function renderGallery() {
         projects.forEach(p => {
             const item = document.createElement('div');
             item.className = 'gallery-item';
+            item.dataset.id = p.id;
             if (p.id === gallerySelectedProjectId) {
                 item.classList.add('selected');
             }
+
+            // HTML5 Drag and Drop bindings
+            item.setAttribute('draggable', 'true');
+            item.addEventListener('dragstart', (e) => {
+                draggedProjectId = p.id;
+                item.classList.add('dragging');
+                e.dataTransfer.setData('text/plain', p.id);
+                e.dataTransfer.effectAllowed = 'move';
+            });
+            item.addEventListener('dragend', async () => {
+                item.classList.remove('dragging');
+                lastTargetId = null;
+
+                // Save final DOM order directly to the database
+                const children = Array.from(gridEl.children);
+                const orderIds = children.map(child => child.dataset.id);
+
+                const db2 = await getDB();
+                const tx2 = db2.transaction('slots', 'readwrite');
+                const store2 = tx2.objectStore('slots');
+
+                orderIds.forEach((id, idx) => {
+                    const proj = projects.find(x => x.id === id);
+                    if (proj) {
+                        proj.order = idx;
+                        store2.put(proj, id);
+                    }
+                });
+                await new Promise(r => tx2.oncomplete = r);
+                document.querySelectorAll('.gallery-item').forEach(el => el.classList.remove('drag-over'));
+            });
+            item.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                e.dataTransfer.dropEffect = 'move';
+
+                const draggedEl = gridEl.querySelector('.dragging');
+                if (draggedEl && draggedEl !== item && p.id !== lastTargetId) {
+                    lastTargetId = p.id;
+                    flipReorder(gridEl, draggedEl, item);
+                }
+            });
+            item.addEventListener('dragleave', () => {
+                item.classList.remove('drag-over');
+            });
+            item.addEventListener('drop', (e) => {
+                e.preventDefault();
+            });
 
             const thumbContainer = document.createElement('div');
             thumbContainer.className = 'gallery-thumb-container';
@@ -224,6 +350,7 @@ async function renderGallery() {
             item.appendChild(label);
 
             item.onclick = () => {
+                if (item.classList.contains('dragging')) return;
                 gallerySelectedProjectId = p.id;
                 galleryMode = 'detail';
                 renderGallery();

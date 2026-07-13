@@ -48,6 +48,11 @@ function init() {
             renameProject(gallerySelectedProjectId);
         }
     };
+    document.getElementById('detail-img').ondblclick = () => {
+        if (gallerySelectedProjectId) {
+            loadProject(gallerySelectedProjectId);
+        }
+    };
 
     // Core event listeners - attached ONLY ONCE
     canvas.addEventListener('pointerdown', handlePointerDown);
@@ -125,6 +130,12 @@ function init() {
     window.addEventListener('dragover', (e) => e.preventDefault());
     window.addEventListener('drop', (e) => {
         e.preventDefault();
+
+        // Only allow dropping files when actively inside the editor (pizarra)
+        const galleryHidden = document.getElementById('gallery-screen').classList.contains('hidden');
+        const startupHidden = document.getElementById('startup-modal').style.display === 'none';
+        if (!galleryHidden || !startupHidden) return;
+
         if (isDraggingLayer) return; // internal layer reorder — do nothing here
         const files = e.dataTransfer.files;
         if (files && files.length > 0) {
@@ -134,6 +145,14 @@ function init() {
 
     // Listener for Paste
     window.addEventListener('paste', (e) => {
+        // Allow paste only when in editor or when explicitly waiting for paste on startup (yellow button pressed)
+        const galleryHidden = document.getElementById('gallery-screen').classList.contains('hidden');
+        const startupHidden = document.getElementById('startup-modal').style.display === 'none';
+        const inEditor = galleryHidden && startupHidden;
+        const waitingStartupPaste = !startupHidden && (startupImportState === 1);
+
+        if (!inEditor && !waitingStartupPaste) return;
+
         // 1. Try to get images from items (standard for images copied from web/apps)
         const items = (e.clipboardData || e.originalEvent.clipboardData).items;
         let found = false;
@@ -176,9 +195,9 @@ function init() {
     // ── Size Preset Popup ──────────────────────────────────────
     (function initSizePresets() {
         const PRESETS = [0.1, 0.3, 0.5, 0.7, 1, 2, 3, 5, 7, 9, 12, 16, 20, 25, 30, 40, 50, 60, 75, 100];
-        const tab     = document.getElementById('size-preset-tab');
-        const popup   = document.getElementById('size-preset-popup');
-        const grid    = document.getElementById('size-preset-grid');
+        const tab = document.getElementById('size-preset-tab');
+        const popup = document.getElementById('size-preset-popup');
+        const grid = document.getElementById('size-preset-grid');
         if (!tab || !popup || !grid) return;
 
         // Build circles
@@ -240,26 +259,26 @@ function init() {
     })();
     // ──────────────────────────────────────────────────────────
 
-    opacitySlider.oninput = (e) => { 
-        brushOpacity = e.target.value / 100; 
-        opacityValue.textContent = e.target.value + '%'; 
+    opacitySlider.oninput = (e) => {
+        brushOpacity = e.target.value / 100;
+        opacityValue.textContent = e.target.value + '%';
         if (currentTool === 'bucket') {
             const t = toolsData.find(x => x.id === 'bucket');
             if (t) t.opacity = brushOpacity;
         } else if (currentBrush) {
-            currentBrush.opacity = brushOpacity; 
+            currentBrush.opacity = brushOpacity;
         }
-        if (eyeIcon) eyeIcon.src = (e.target.value | 0) === 0 ? 'simbolo ojo cerrado.png' : 'imagenes/simbolo ojo abierto.png'; 
-        requestRender(); 
+        if (eyeIcon) eyeIcon.src = (e.target.value | 0) === 0 ? 'simbolo ojo cerrado.png' : 'imagenes/simbolo ojo abierto.png';
+        requestRender();
     };
     opacitySlider.onpointerup = (e) => e.target.blur();
 
     // ── Opacity Preset Popup ───────────────────────────────────
     (function initOpacityPresets() {
-        const PRESETS = [5,10,15,20,25,30,35,40,45,50,55,60,65,70,75,80,85,90,95,100];
-        const tab   = document.getElementById('opacity-preset-tab');
+        const PRESETS = [5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60, 65, 70, 75, 80, 85, 90, 95, 100];
+        const tab = document.getElementById('opacity-preset-tab');
         const popup = document.getElementById('opacity-preset-popup');
-        const grid  = document.getElementById('opacity-preset-grid');
+        const grid = document.getElementById('opacity-preset-grid');
         if (!tab || !popup || !grid) return;
 
         // Draw a small circle with a checkerboard behind + fill at the given opacity
@@ -369,7 +388,7 @@ function init() {
         pressureSlider.onpointerup = (e) => e.target.blur();
     }
 
-    const velocitySlider     = document.getElementById('velocity-slider');
+    const velocitySlider = document.getElementById('velocity-slider');
     const velocityValueLabel = document.getElementById('velocity-value');
     if (velocitySlider) {
         velocitySlider.oninput = (e) => {
@@ -383,8 +402,8 @@ function init() {
     if (velocityModeBtn) {
         velocityModeBtn.addEventListener('click', () => {
             velocityMode = velocityMode === 'slow' ? 'fast' : 'slow';
-            velocityModeBtn.textContent  = velocityMode === 'slow' ? 'LENTO=+' : 'RÁPIDO=+';
-            velocityModeBtn.style.color  = velocityMode === 'slow' ? '#aaa' : '#8cf';
+            velocityModeBtn.textContent = velocityMode === 'slow' ? 'LENTO=+' : 'RÁPIDO=+';
+            velocityModeBtn.style.color = velocityMode === 'slow' ? '#aaa' : '#8cf';
         });
     }
 
@@ -425,10 +444,10 @@ function init() {
 
     // Quick layer action buttons
     const qAlpha = document.getElementById('qbtn-alpha');
-    const qClip  = document.getElementById('qbtn-clip');
+    const qClip = document.getElementById('qbtn-clip');
     const qMerge = document.getElementById('qbtn-merge');
-    const ACTIVE_STYLE  = 'background: rgba(0,200,80,0.75); border-color: #00cc44; color: #fff;';
-    const IDLE_STYLE    = 'background: rgba(255,255,255,0.4); backdrop-filter:blur(5px); border: 1px solid rgba(255,255,255,0.5); color: #333;';
+    const ACTIVE_STYLE = 'background: rgba(0,200,80,0.75); border-color: #00cc44; color: #fff;';
+    const IDLE_STYLE = 'background: rgba(255,255,255,0.4); backdrop-filter:blur(5px); border: 1px solid rgba(255,255,255,0.5); color: #333;';
 
     if (qAlpha) {
         qAlpha.addEventListener('pointerdown', (e) => {
@@ -460,12 +479,12 @@ function init() {
             updateThumbnails(); updateLayersUI();
         });
     }
-    window._syncQuickLayerBtns = function() {
+    window._syncQuickLayerBtns = function () {
         const l = layers[selectedLayerIndex];
         if (!l) return;
         const BASE = 'padding:3px 10px; border-radius:12px; font-size:10px; font-weight:bold; cursor:pointer; transition:all 0.2s; white-space:nowrap; backdrop-filter:blur(5px);';
         if (qAlpha) qAlpha.style.cssText = BASE + (l.alphaLocked ? ACTIVE_STYLE : IDLE_STYLE);
-        if (qClip)  qClip.style.cssText  = BASE + (l.clippingMask ? ACTIVE_STYLE : IDLE_STYLE);
+        if (qClip) qClip.style.cssText = BASE + (l.clippingMask ? ACTIVE_STYLE : IDLE_STYLE);
         if (qMerge) qMerge.style.cssText = BASE + IDLE_STYLE;
     };
     document.getElementById('duplicate-layer-btn').onclick = duplicateSelectedLayer;
@@ -480,7 +499,7 @@ function init() {
         }
     };
     document.getElementById('insert-layer-btn').onclick = () => addLayer("Capa desde lienzo", true);
-    
+
     const toggleBgBtn = document.getElementById('toggle-bg-btn');
     toggleBgBtn.onclick = toggleBackground;
     toggleBgBtn.oncontextmenu = (e) => {

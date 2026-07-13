@@ -1900,6 +1900,17 @@ body:not(.theme-classic) .tool-btn img {
     transform: translateY(-2px);
 }
 
+.gallery-item.dragging {
+    opacity: 0.4;
+    transform: scale(0.95);
+}
+
+.gallery-item.drag-over .gallery-thumb-container {
+    border: 3px dashed #3b82f6 !important;
+    box-shadow: 0 0 15px rgba(59, 130, 246, 0.4);
+    transform: scale(1.05);
+}
+
 .gallery-thumb-container {
     width: 100%;
     aspect-ratio: 0.8; /* Portrait aspect ratio matching typical drawings */

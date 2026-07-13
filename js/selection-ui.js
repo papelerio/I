@@ -113,6 +113,16 @@ function buildSelectionUI() {
         updateEyedropperModeUI();
     };
     container.appendChild(eyedropperModeBtn);
+
+    // Fill-Lasso / Lasso-Eraser draw mode button
+    lassoFillModeBtn = document.createElement('button');
+    lassoFillModeBtn.id = 'lasso-fill-mode-btn';
+    lassoFillModeBtn.className = 'indicator-extra-btn hidden';
+    lassoFillModeBtn.onclick = () => {
+        lassoFillMode = lassoFillMode === 'libre' ? 'rectangulo' : 'libre';
+        updateLassoFillModeUI();
+    };
+    container.appendChild(lassoFillModeBtn);
 }
 
 function updateEyedropperModeUI() {
@@ -120,6 +130,14 @@ function updateEyedropperModeUI() {
     eyedropperModeBtn.textContent = eyedropperMode === 'original' ? '🎨 ORIGINAL' : '📷 CAPTURA';
     eyedropperModeBtn.style.background = eyedropperMode === 'original'
         ? 'rgba(0,180,80,0.75)' : 'rgba(0,0,0,0.55)';
+}
+
+function updateLassoFillModeUI() {
+    if (!lassoFillModeBtn) return;
+    const isRect = lassoFillMode === 'rectangulo';
+    lassoFillModeBtn.textContent = isRect ? '⬛ RECTÁNGULO' : '✏️ LIBRE';
+    lassoFillModeBtn.style.background = isRect ? '#0066ff' : '';
+    lassoFillModeBtn.style.color = isRect ? 'white' : '';
 }
 
 function updateShapeFromCenterUI() {
@@ -149,7 +167,7 @@ function updateShapeModifiableUI() {
 
 function showSelectionButtons(tool) {
     // Hide all extras first
-    [lassoSelBtn, lassoDesBtn, modifySelBtn, clearSelBtn, shapeFillBtn, shapeFromCenterBtn, shapeModifiableBtn, fitScreenBtn, eyedropperModeBtn].forEach(b => { if (b) b.classList.add('hidden'); });
+    [lassoSelBtn, lassoDesBtn, modifySelBtn, clearSelBtn, shapeFillBtn, shapeFromCenterBtn, shapeModifiableBtn, fitScreenBtn, eyedropperModeBtn, lassoFillModeBtn].forEach(b => { if (b) b.classList.add('hidden'); });
 
     if (tool === 'lazo-sel') { if (lassoSelBtn) lassoSelBtn.classList.remove('hidden'); if (hasSelection && clearSelBtn) clearSelBtn.classList.remove('hidden'); }
     if (tool === 'lazo-des') { if (lassoDesBtn) lassoDesBtn.classList.remove('hidden'); if (hasSelection && clearSelBtn) clearSelBtn.classList.remove('hidden'); }
@@ -160,6 +178,13 @@ function showSelectionButtons(tool) {
         if (eyedropperModeBtn) {
             eyedropperModeBtn.classList.remove('hidden');
             updateEyedropperModeUI();
+        }
+    }
+
+    if (tool === 'pincel' && currentBrush.isLasso) {
+        if (lassoFillModeBtn) {
+            lassoFillModeBtn.classList.remove('hidden');
+            updateLassoFillModeUI();
         }
     }
 

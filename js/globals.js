@@ -232,6 +232,7 @@ let eyedropperMode = 'captura'; // 'captura' | 'original'
 let currentProjectId = null;     // ID of current project (null if none loaded)
 let currentProjectTitle = 'Sin título'; // Title of current project
 let currentProjectTime = 0;      // Accumulated active editing time in seconds
+let currentProjectOrder = 0;     // Drag order weight of current project
 let projectTimerInterval = null; // Timer interval for active time tracking
 let newLayerShortcut = '*';
 let pressureSensitivity = 0.6;
@@ -250,6 +251,9 @@ let isTemporaryPan = false;
 // Lasso/Bucket State
 let lassoPath = [];
 let lassoLastScreenX = null, lassoLastScreenY = null;
+let lassoFillMode = 'libre';    // 'libre' | 'rectangulo' — fill/eraser lasso draw mode
+let lassoFillStartX = 0, lassoFillStartY = 0; // anchor for rectangle mode
+let lassoFillModeBtn = null;    // top-left indicator button for fill-lasso mode
 let bucketMode = 'capa';        // 'capa' | 'lienzo' — which source to sample from
 let bucketTolerance = 32;       // 0–255 color match tolerance
 let bucketContiguous = true;    // flood-fill (true) vs global pixel replace (false)
