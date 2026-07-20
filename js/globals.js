@@ -234,6 +234,7 @@ let currentProjectTitle = 'Sin título'; // Title of current project
 let currentProjectTime = 0;      // Accumulated active editing time in seconds
 let currentProjectOrder = 0;     // Drag order weight of current project
 let projectTimerInterval = null; // Timer interval for active time tracking
+let imageSmoothing = localStorage.getItem('imageSmoothing') !== 'false'; // image smoothing preference
 let newLayerShortcut = '*';
 let pressureSensitivity = 0.6;
 let velocitySensitivity = 0.0;   // 0 = off, 1 = full

@@ -53,6 +53,27 @@ html {
     transition: background-color 0.3s, color 0.3s;
 }
 
+/* ── Save Flash Overlay ─────────────────────────────────────── */
+@keyframes save-flash {
+    0%   { opacity: 0; box-shadow: inset 0 0 0 4px #4ade80; }
+    18%  { opacity: 1; box-shadow: inset 0 0 0 4px #4ade80; }
+    60%  { opacity: 1; box-shadow: inset 0 0 0 4px #4ade80; }
+    100% { opacity: 0; box-shadow: inset 0 0 0 4px #4ade80; }
+}
+
+#save-flash-overlay {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 99999;
+    opacity: 0;
+    border-radius: 0;
+}
+
+#save-flash-overlay.flashing {
+    animation: save-flash 0.9s ease-out forwards;
+}
+
 .app-container {
     display: flex;
     width: 100vw;
@@ -497,6 +518,8 @@ body:not(.theme-classic) .tool-btn img {
 }
 
 .config-grid-small {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
     gap: 8px;
 }
 
@@ -2088,4 +2111,190 @@ body:not(.theme-classic) .tool-btn img {
 }
 .gallery-delete-btn:hover {
     background: #ff3333 !important;
+}
+
+/* ── Brush & Multi-tool Grid Layout ────────────────────────── */
+.tools-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 12px;
+    padding: 5px 0;
+    margin: 0;
+    list-style: none;
+}
+
+.grid-item-card {
+    position: relative;
+    aspect-ratio: 1;
+    background: #858585;
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    padding: 10px;
+}
+
+.grid-item-card:hover {
+    background: #9c9c9c;
+    border-color: var(--accent-color);
+    transform: scale(1.05);
+}
+
+.grid-item-card.active {
+    background: #858585;
+    border: 2px solid var(--accent-color);
+    box-shadow: 0 0 12px rgba(59, 130, 246, 0.45);
+}
+
+.grid-item-card img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    transition: transform 0.2s;
+}
+
+.grid-item-card:hover img {
+    transform: scale(1.05);
+}
+
+.grid-item-shortcut-badge {
+    position: absolute;
+    bottom: 4px;
+    right: 4px;
+    background: rgba(15, 15, 20, 0.85);
+    backdrop-filter: blur(4px);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    color: #fff;
+    font-size: 9px;
+    font-weight: 700;
+    padding: 1px 4px;
+    border-radius: 4px;
+    text-transform: uppercase;
+    pointer-events: none;
+    line-height: 1;
+    min-width: 12px;
+    text-align: center;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.4);
+}
+
+/* ── Shortcut Edit Modal ───────────────────────────────────── */
+.shortcut-modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.6);
+    backdrop-filter: blur(6px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 20000;
+}
+
+.shortcut-modal-content {
+    background: var(--bg-floating);
+    border: 1px solid var(--border-color);
+    border-radius: 16px;
+    padding: 20px;
+    width: 320px;
+    box-shadow: 0 15px 50px rgba(0, 0, 0, 0.5);
+    color: var(--text-main);
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+    animation: modal-appear 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes modal-appear {
+    from { opacity: 0; transform: scale(0.95); }
+    to { opacity: 1; transform: scale(1); }
+}
+
+.shortcut-modal-header {
+    font-size: 16px;
+    font-weight: 600;
+    border-bottom: 1px solid var(--border-color);
+    padding-bottom: 10px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.shortcut-modal-header img {
+    width: 24px;
+    height: 24px;
+    object-fit: contain;
+}
+
+.shortcut-modal-body {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.shortcut-field-group {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+
+.shortcut-field-group label {
+    font-size: 11px;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    font-weight: 600;
+}
+
+.shortcut-modal-input {
+    background: var(--input-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    color: var(--text-main);
+    padding: 8px 12px;
+    font-size: 14px;
+    font-family: inherit;
+    text-align: center;
+    text-transform: uppercase;
+}
+
+.shortcut-modal-input:focus {
+    border-color: var(--accent-color);
+    outline: none;
+}
+
+.shortcut-modal-actions {
+    display: flex;
+    gap: 10px;
+    margin-top: 5px;
+}
+
+.shortcut-modal-btn {
+    flex: 1;
+    border: none;
+    border-radius: 8px;
+    padding: 10px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.15s;
+    font-family: inherit;
+}
+
+.shortcut-modal-btn.save {
+    background: var(--accent-color);
+    color: #fff;
+}
+
+.shortcut-modal-btn.save:hover {
+    background: #2563eb;
+}
+
+.shortcut-modal-btn.cancel {
+    background: rgba(255, 255, 255, 0.08);
+    color: var(--text-main);
+}
+
+.shortcut-modal-btn.cancel:hover {
+    background: rgba(255, 255, 255, 0.12);
 }

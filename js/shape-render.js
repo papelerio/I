@@ -192,8 +192,8 @@ function drawLayerContent(targetCtx, layerObj) {
                 const cx = b.x + b.w / 2;
                 const cy = b.y + b.h / 2;
                 targetCtx.save();
-                targetCtx.imageSmoothingEnabled = true;
-                targetCtx.imageSmoothingQuality = 'high';
+                targetCtx.imageSmoothingEnabled = imageSmoothing;
+                targetCtx.imageSmoothingQuality = imageSmoothing ? 'high' : 'low';
                 targetCtx.translate(cx, cy);
                 targetCtx.rotate(modSelRotation);
                 targetCtx.scale(modSelFlipX, modSelFlipY);

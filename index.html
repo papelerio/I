@@ -12,6 +12,9 @@
 </head>
 
 <body>
+    <!-- Save flash overlay (pointer-events:none, shown briefly on Ctrl+S) -->
+    <div id="save-flash-overlay"></div>
+
     <!-- Proyecto Galería -->
     <div id="gallery-screen" class="gallery-overlay">
         <header class="gallery-header">
@@ -419,6 +422,11 @@
                     <img src="iconos preferencias/puntero.png" alt="Puntero">
                     <span class="config-card-label">Puntero</span>
                     <span class="config-card-value" id="cursor-mode-value">SIEMPRE VISIBLE</span>
+                </button>
+                <button class="config-card config-card-small" id="toggle-smoothing">
+                    <img src="iconos preferencias/suavisado.png" alt="Suavizado">
+                    <span class="config-card-label">Suavizado</span>
+                    <span class="config-card-value" id="smoothing-value">ON</span>
                 </button>
             </div>
         </div>

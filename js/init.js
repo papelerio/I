@@ -22,6 +22,13 @@ function init() {
     window.addEventListener('resize', setupScreen);
     document.addEventListener('contextmenu', e => e.preventDefault());
 
+    // Initialize smoothing preference
+    const smoothingVal = document.getElementById('smoothing-value');
+    if (smoothingVal) {
+        smoothingVal.textContent = imageSmoothing ? 'ON' : 'OFF';
+    }
+    canvas.style.imageRendering = imageSmoothing ? 'auto' : 'pixelated';
+
     // Render Gallery on startup
     renderGallery();
 
@@ -566,6 +573,14 @@ function init() {
         cursorMode = cursorMode === 'always' ? 'auto' : 'always';
         document.getElementById('cursor-mode-value').textContent = cursorMode === 'always' ? 'SIEMPRE VISIBLE' : 'AUTOMÁTICO';
         applyCursor(false);
+    };
+    document.getElementById('toggle-smoothing').onclick = (e) => {
+        imageSmoothing = !imageSmoothing;
+        localStorage.setItem('imageSmoothing', imageSmoothing);
+        const val = document.getElementById('smoothing-value');
+        if (val) val.textContent = imageSmoothing ? 'ON' : 'OFF';
+        canvas.style.imageRendering = imageSmoothing ? 'auto' : 'pixelated';
+        requestRender();
     };
 
     // Resize Canvas

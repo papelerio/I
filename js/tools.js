@@ -112,6 +112,10 @@ function selectTool(id, name) {
         eyedropperPreview?.classList.add('hidden');
     }
 
+    // Refresh active states in the grid menus
+    if (typeof setupMultiToolMenu === 'function') setupMultiToolMenu();
+    if (typeof setupBrushMenu === 'function') setupBrushMenu();
+
     updateTintedTexture();
 }
 

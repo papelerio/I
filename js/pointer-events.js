@@ -425,12 +425,15 @@ function handlePointerUp(e) {
         }
         if (currentBrush.isLasso) {
             if (lassoFillMode === 'rectangulo') {
-                // Rectangle mode: draw directly with fillRect — pixel-perfect, no path smoothing
+                // Rectangle mode: draw directly with fillRect — pixel-perfect, no path smoothing.
+                // lassoPath is kept as a 4-corner rect by pointermove, so the end point is lassoPath[2].
+                const endX = lassoPath.length >= 3 ? lassoPath[2].x : lassoFillStartX;
+                const endY = lassoPath.length >= 3 ? lassoPath[2].y : lassoFillStartY;
                 const l = layers[selectedLayerIndex];
-                const rx = Math.min(lassoFillStartX, lastX);
-                const ry = Math.min(lassoFillStartY, lastY);
-                const rw = Math.abs(lastX - lassoFillStartX);
-                const rh = Math.abs(lastY - lassoFillStartY);
+                const rx = Math.min(lassoFillStartX, endX);
+                const ry = Math.min(lassoFillStartY, endY);
+                const rw = Math.abs(endX - lassoFillStartX);
+                const rh = Math.abs(endY - lassoFillStartY);
                 if (rw > 0 && rh > 0) {
                     l.ctx.save();
                     if (currentBrush.isEraser) {

@@ -1,7 +1,9 @@
-﻿function render() {
+function render() {
     renderRequested = false;
     const isPreviewing = isDrawing && (currentBrush.useCompositing || isPostStrokePreview) && !currentBrush.isLasso && !activeFilterType;
     ctx.clearRect(0, 0, canvas.width, canvas.height); ctx.save();
+    ctx.imageSmoothingEnabled = imageSmoothing;
+    ctx.imageSmoothingQuality = imageSmoothing ? 'high' : 'low';
     ctx.translate(canvas.width / 2 + viewPosX, canvas.height / 2 + viewPosY);
     ctx.rotate(viewRotation); ctx.scale(viewScale, viewScale);
     ctx.translate(-paperWidth / 2, -paperHeight / 2);
@@ -156,14 +158,47 @@
         }
     }
 
+    // ── Canvas X-ray border (shown while modifying selection / pasting) ──
+    if (currentTool === 'modify-sel' && modSelInitialized) {
+        ctx.save();
+        const dashLen = 10 / viewScale;
+        const gapLen  = 7  / viewScale;
+        const lw      = 2  / viewScale;
+
+        // Outer glow: slightly thicker semi-transparent stroke for visibility on any bg
+        ctx.strokeStyle = 'rgba(59,130,246,0.25)';
+        ctx.lineWidth   = (lw + 4) / viewScale * viewScale; // keep in world units
+        ctx.lineWidth   = (lw * 3);
+        ctx.setLineDash([dashLen, gapLen]);
+        ctx.lineDashOffset = 0;
+        ctx.strokeRect(-0.5 / viewScale, -0.5 / viewScale,
+                       paperWidth + 1 / viewScale, paperHeight + 1 / viewScale);
+
+        // Sharp inner dashed blue line
+        ctx.strokeStyle = '#3b82f6';
+        ctx.lineWidth   = lw;
+        ctx.setLineDash([dashLen, gapLen]);
+        ctx.strokeRect(0, 0, paperWidth, paperHeight);
+
+        // Corner markers: small solid squares at the four corners for extra clarity
+        const m = 6 / viewScale; // marker half-size
+        ctx.setLineDash([]);
+        ctx.fillStyle = '#3b82f6';
+        [[0, 0], [paperWidth, 0], [0, paperHeight], [paperWidth, paperHeight]].forEach(([cx, cy]) => {
+            ctx.fillRect(cx - m, cy - m, m * 2, m * 2);
+        });
+
+        ctx.restore();
+    }
+
     // ── Draw floating modify preview ──
     if (currentTool === 'modify-sel' && modSelInitialized && modSelCanvas && modSelBounds) {
         ctx.save();
         ctx.beginPath();
         ctx.rect(0, 0, paperWidth, paperHeight);
         ctx.clip();
-        ctx.imageSmoothingEnabled = true;
-        ctx.imageSmoothingQuality = 'high';
+        ctx.imageSmoothingEnabled = imageSmoothing;
+        ctx.imageSmoothingQuality = imageSmoothing ? 'high' : 'low';
 
         if (modSelPerspectiveMode && perspCorners) {
             // ── Perspective warp preview using scanline rendering ──

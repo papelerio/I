@@ -1,4 +1,4 @@
-﻿//  PERSPECTIVE WARP RENDERER (bilinear scanline)
+//  PERSPECTIVE WARP RENDERER (bilinear scanline)
 // ─────────────────────────────────────────────────────────────
 /**
  * Draws an affine-mapped triangle from the source image onto the canvas.
@@ -169,8 +169,8 @@ function commitModifySelection() {
 
             const b = modSelBounds;
             lCtx.save();
-            lCtx.imageSmoothingEnabled = true;
-            lCtx.imageSmoothingQuality = 'high';
+            lCtx.imageSmoothingEnabled = imageSmoothing;
+            lCtx.imageSmoothingQuality = imageSmoothing ? 'high' : 'low';
             const cx = b.x + b.w / 2;
             const cy = b.y + b.h / 2;
             lCtx.translate(cx, cy);
@@ -199,8 +199,8 @@ function commitModifySelection() {
             const target = layers[selectedLayerIndex].ctx;
             const b = modSelBounds;
             target.save();
-            target.imageSmoothingEnabled = true;
-            target.imageSmoothingQuality = 'high';
+            target.imageSmoothingEnabled = imageSmoothing;
+            target.imageSmoothingQuality = imageSmoothing ? 'high' : 'low';
             if (layers[selectedLayerIndex].alphaLocked) target.globalCompositeOperation = 'source-atop';
             const cx = b.x + b.w / 2;
             const cy = b.y + b.h / 2;
@@ -218,8 +218,8 @@ function commitModifySelection() {
         modSelLayersData.forEach(item => {
             const target = item.layer.ctx;
             target.save();
-            target.imageSmoothingEnabled = true;
-            target.imageSmoothingQuality = 'high';
+            target.imageSmoothingEnabled = imageSmoothing;
+            target.imageSmoothingQuality = imageSmoothing ? 'high' : 'low';
             const cx = b.x + b.w / 2;
             const cy = b.y + b.h / 2;
             target.translate(cx, cy);
