@@ -52,7 +52,7 @@ function handlePointerDown(e) {
     const rawP = (e.pressure === 0.5 && e.pointerType !== 'mouse') ? 0.1 : e.pressure || 0.1;
     lastPressure = rawP; smoothedPressure = rawP;
 
-    if (currentTool === 'rotate') { rotationPivot = { sx: e.offsetX, sy: e.offsetY, startRotation: viewRotation }; }
+    if (currentTool === 'rotate') { rotationPivot = { sx: e.offsetX, sy: e.offsetY, startRotation: viewRotation, startPosX: viewPosX, startPosY: viewPosY }; }
     else if (currentTool === 'zoom') {
         const w = screenToWorld(e.offsetX, e.offsetY);
         if (w.x >= 0 && w.x <= paperWidth && w.y >= 0 && w.y <= paperHeight) {
@@ -265,7 +265,20 @@ function handlePointerMove(e) {
             viewPosY = zoomPivotScreen.y - canvas.height / 2 - rdy;
         }
     }
-    else if (currentTool === 'rotate') { viewRotation = rotationPivot.startRotation + (e.offsetX - rotationPivot.sx) * 0.01; resetRotationBtn.classList.remove('hidden'); }
+    else if (currentTool === 'rotate') {
+        const newRotation = rotationPivot.startRotation + (e.offsetX - rotationPivot.sx) * 0.01;
+        const dAngle = newRotation - rotationPivot.startRotation;
+        const cos = Math.cos(dAngle);
+        const sin = Math.sin(dAngle);
+        // Rotar el offset inicial alrededor del centro de pantalla (0,0 relativo)
+        // para que el punto visualmente bajo el centro no cambie de posición
+        const px = rotationPivot.startPosX;
+        const py = rotationPivot.startPosY;
+        viewPosX = px * cos - py * sin;
+        viewPosY = px * sin + py * cos;
+        viewRotation = newRotation;
+        resetRotationBtn.classList.remove('hidden');
+    }
     else if (currentTool === 'lazo-sel' || currentTool === 'lazo-des') {
         if (lassoSelMode === 'libre') lassoSelPath.push({ x: world.x, y: world.y });
         else lassoSelPath = squarePath(lassoSelStartX, lassoSelStartY, world.x, world.y);

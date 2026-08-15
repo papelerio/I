@@ -382,3 +382,94 @@ async function renderGallery() {
         document.getElementById('detail-time').textContent = formatTime(project.time || 0);
     }
 }
+
+async function duplicateProject(id) {
+    const db = await getDB();
+    const tx = db.transaction('slots', 'readonly');
+    const project = await new Promise(res => tx.objectStore('slots').get(id).onsuccess = e => res(e.target.result));
+    if (!project) return;
+
+    const newId = 'proj_' + Date.now();
+    const duplicate = Object.assign({}, project, {
+        id: newId,
+        title: (project.title || 'Sin título') + ' (copia)',
+        order: (project.order || 0) - 0.5,
+        savedAt: Date.now()
+    });
+
+    const tx2 = db.transaction('slots', 'readwrite');
+    tx2.objectStore('slots').put(duplicate, newId);
+    await new Promise(res => tx2.oncomplete = res);
+
+    renderGallery();
+}
+
+// ─── Gallery Context Menu ────────────────────────────────────
+(function initGalleryContextMenu() {
+    const menu = document.createElement('div');
+    menu.id = 'gallery-context-menu';
+    menu.style.display = 'none';
+    menu.innerHTML = `
+        <div class="gallery-ctx-item" id="gctx-rename">
+            <span class="gallery-ctx-icon">✏️</span> Renombrar
+        </div>
+        <div class="gallery-ctx-item" id="gctx-duplicate">
+            <span class="gallery-ctx-icon">📋</span> Duplicar
+        </div>
+        <div class="gallery-ctx-separator"></div>
+        <div class="gallery-ctx-item danger" id="gctx-delete">
+            <span class="gallery-ctx-icon">🗑️</span> Eliminar
+        </div>
+    `;
+    document.body.appendChild(menu);
+
+    let targetId = null;
+
+    function showMenu(x, y, id) {
+        targetId = id;
+        menu.style.display = 'block';
+        const mw = 180, mh = 148;
+        const left = x + mw > window.innerWidth  ? x - mw : x;
+        const top  = y + mh > window.innerHeight ? y - mh : y;
+        menu.style.left = left + 'px';
+        menu.style.top  = top  + 'px';
+        // Re-trigger animation
+        menu.style.animation = 'none';
+        menu.offsetHeight;
+        menu.style.animation = '';
+    }
+
+    function hideMenu() {
+        menu.style.display = 'none';
+        targetId = null;
+    }
+
+    document.getElementById('gctx-rename').addEventListener('click', () => {
+        const id = targetId; hideMenu();
+        if (id) renameProject(id);
+    });
+    document.getElementById('gctx-duplicate').addEventListener('click', () => {
+        const id = targetId; hideMenu();
+        if (id) duplicateProject(id);
+    });
+    document.getElementById('gctx-delete').addEventListener('click', () => {
+        const id = targetId; hideMenu();
+        if (id) deleteProject(id);
+    });
+
+    // Close on outside click or Escape
+    document.addEventListener('pointerdown', (e) => {
+        if (menu.style.display !== 'none' && !menu.contains(e.target)) hideMenu();
+    }, true);
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') hideMenu();
+    });
+
+    // Listen for right-click on gallery grid items
+    document.getElementById('gallery-grid').addEventListener('contextmenu', (e) => {
+        const item = e.target.closest('.gallery-item');
+        if (!item) return;
+        e.preventDefault();
+        showMenu(e.clientX, e.clientY, item.dataset.id);
+    });
+})();

@@ -1,4 +1,4 @@
-﻿// ─────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────
 //  FILTERS LOGIC
 // ─────────────────────────────────────────────────────────────
 let activeFilterType = null;
@@ -25,6 +25,8 @@ let chromaMaskCtx = null;
 let chromaDebugBG = null; // null, '#ff0000', '#00ff00', '#0000ff'
 let outlineCache = { params: {}, solid: null, outerDist: null, innerDist: null };
 let chromaLassoMode = 'none'; // 'none', 'add' (regenerador), 'sub' (eliminador), 'clear' (nulo), 'pick'
+let multitoneCount = 1;
+let multitoneColors = ['#00ffcc', '#11002c', '#ff0055', '#ffea00', '#0088ff', '#ff8800', '#ffffff'];
 
 function selectChromaLasso(mode) {
     const lassoBtns = document.querySelectorAll('.chroma-lasso-btn');
@@ -210,6 +212,12 @@ function openFilterModal(type) {
         }
         chromaMaskCtx.clearRect(0, 0, paperWidth, paperHeight);
         chromaLassoMode = 'pick';
+    } else if (type === 'multitone') {
+        title.textContent = 'Multitono';
+        desc.textContent = 'Mapea la luminosidad a una paleta de colores personalizados.';
+        multitoneCount = 1;
+        multitoneColors = ['#00ffcc', '#11002c', '#ff0055', '#ffea00', '#0088ff', '#ff8800', '#ffffff'];
+        buildMultitoneUI(container);
     }
 
     filterModal.classList.remove('hidden');
@@ -256,6 +264,79 @@ function addFilterSlider(label, min, max, val, oninput) {
     btnUp.onclick = () => update(parseInt(input.value) + 1);
 
     document.getElementById('filter-controls-container').appendChild(wrap);
+}
+
+// ── Multitone UI builder ──────────────────────────────────────
+function buildMultitoneUI(container) {
+    const presets = ['#00ffcc', '#11002c', '#ff0055', '#ffea00', '#0088ff', '#ff8800', '#ffffff'];
+
+    const countWrap = document.createElement('div');
+    countWrap.style.cssText = 'display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;';
+    countWrap.innerHTML = `
+        <label style="font-size:11px; font-weight:700; color:#444;">N° de Tonos</label>
+        <div style="display:flex; gap:6px; align-items:center;">
+            <button id="multitone-dec" class="mini-tool-btn" style="width:24px;height:24px;">-</button>
+            <span id="multitone-count-val" style="font-size:13px;font-weight:700;min-width:20px;text-align:center;">1</span>
+            <button id="multitone-inc" class="mini-tool-btn" style="width:24px;height:24px;">+</button>
+        </div>
+    `;
+    container.appendChild(countWrap);
+
+    const palette = document.createElement('div');
+    palette.id = 'multitone-palette';
+    palette.style.cssText = 'display:flex; flex-wrap:wrap; gap:10px; padding:10px; background:rgba(0,0,0,0.05); border-radius:8px;';
+    container.appendChild(palette);
+
+    function refreshPalette() {
+        palette.innerHTML = '';
+        for (let i = 0; i < multitoneCount; i++) {
+            const currentColor = multitoneColors[i] || presets[i % presets.length];
+            const group = document.createElement('div');
+            group.style.cssText = 'display:flex;flex-direction:column;align-items:center;gap:4px;font-size:10px;color:#555;';
+
+            const swatch = document.createElement('div');
+            swatch.style.cssText = `width:32px;height:32px;border-radius:8px;border:2px solid rgba(0,0,0,0.15);background:${currentColor};cursor:pointer;box-shadow:0 2px 6px rgba(0,0,0,0.2);`;
+
+            const picker = document.createElement('input');
+            picker.type = 'color';
+            picker.value = currentColor;
+            picker.style.cssText = 'width:0;height:0;opacity:0;position:absolute;pointer-events:none;';
+
+            const idx = i;
+            swatch.onclick = () => picker.click();
+            picker.oninput = () => {
+                multitoneColors[idx] = picker.value;
+                swatch.style.background = picker.value;
+                applyFilters();
+            };
+
+            const lbl = document.createElement('span');
+            lbl.textContent = multitoneCount === 1 ? 'Tono' : `T${i + 1}`;
+
+            group.appendChild(swatch);
+            group.appendChild(picker);
+            group.appendChild(lbl);
+            palette.appendChild(group);
+        }
+        applyFilters();
+    }
+
+    countWrap.querySelector('#multitone-dec').onclick = () => {
+        if (multitoneCount > 1) {
+            multitoneCount--;
+            countWrap.querySelector('#multitone-count-val').textContent = multitoneCount;
+            refreshPalette();
+        }
+    };
+    countWrap.querySelector('#multitone-inc').onclick = () => {
+        if (multitoneCount < 10) {
+            multitoneCount++;
+            countWrap.querySelector('#multitone-count-val').textContent = multitoneCount;
+            refreshPalette();
+        }
+    };
+
+    refreshPalette();
 }
 
 function addFilterToggle(label, modes, current, onclick) {
@@ -849,6 +930,55 @@ function applyFilters() {
             }
 
             data[i + 3] = Math.min(data[i + 3], alpha);
+        }
+    } else if (activeFilterType === 'multitone') {
+        // ── Build 256-entry LUT (one pass, tiny) ──────────────────
+        const hexToRgbMT = (hex) => {
+            const bigint = parseInt(hex.slice(1), 16);
+            return [(bigint >> 16) & 255, (bigint >> 8) & 255, bigint & 255];
+        };
+        const presets = ['#00ffcc', '#11002c', '#ff0055', '#ffea00', '#0088ff', '#ff8800', '#ffffff'];
+        const colors = [];
+        for (let ci = 0; ci < multitoneCount; ci++) {
+            colors.push(hexToRgbMT(multitoneColors[ci] || presets[ci % presets.length]));
+        }
+        const numColors = colors.length;
+
+        // lutR/G/B map luminance 0-255 → output channel 0-255
+        const lutR = new Uint8Array(256);
+        const lutG = new Uint8Array(256);
+        const lutB = new Uint8Array(256);
+
+        if (numColors === 1) {
+            // Monochrome tint
+            const [cr, cg, cb] = colors[0];
+            for (let v = 0; v < 256; v++) {
+                const f = v / 255;
+                lutR[v] = Math.round(f * cr);
+                lutG[v] = Math.round(f * cg);
+                lutB[v] = Math.round(f * cb);
+            }
+        } else {
+            const n1 = numColors - 1;
+            for (let v = 0; v < 256; v++) {
+                const scaledLum = (v / 255) * n1;
+                const idx = Math.min(scaledLum | 0, n1 - 1);
+                const f = scaledLum - idx;
+                const c1 = colors[idx], c2 = colors[idx + 1];
+                lutR[v] = Math.round(c1[0] + f * (c2[0] - c1[0]));
+                lutG[v] = Math.round(c1[1] + f * (c2[1] - c1[1]));
+                lutB[v] = Math.round(c1[2] + f * (c2[2] - c1[2]));
+            }
+        }
+
+        // ── Fast pixel loop: 3 LUT lookups per pixel ──────────────
+        for (let i = 0; i < data.length; i += 4) {
+            // Integer luminance 0-255 (no division, integer bitwise trick)
+            const lum = (77 * data[i] + 150 * data[i + 1] + 29 * data[i + 2]) >> 8;
+            data[i]     = lutR[lum];
+            data[i + 1] = lutG[lum];
+            data[i + 2] = lutB[lum];
+            // data[i + 3] alpha unchanged
         }
     }
 
