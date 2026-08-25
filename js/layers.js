@@ -1,4 +1,4 @@
-﻿//  LAYERS
+//  LAYERS
 // ─────────────────────────────────────────────────────────────
 function addLayer(name, fromCanvas = false) {
     if (name === "Nueva Capa" || name === "Capa 1") {
@@ -218,6 +218,48 @@ function updateLayersUI() {
             input.select();
         };
         mainInfo.appendChild(nameSpan);
+
+        // ── Botones de reordenar capa (arriba / abajo) ──
+        const reorderWrap = document.createElement('div');
+        reorderWrap.className = 'layer-reorder-btns';
+
+        const moveUpBtn = document.createElement('button');
+        moveUpBtn.className = 'layer-reorder-btn';
+        moveUpBtn.title = 'Subir capa';
+        moveUpBtn.innerHTML = '<img src="iconos acciones de capas/flecha arriba.png" alt="Subir">';
+        moveUpBtn.disabled = (i === layers.length - 1); // ya está arriba del todo
+        moveUpBtn.onclick = (e) => {
+            e.stopPropagation();
+            if (i >= layers.length - 1) return;
+            endPushSession();
+            const [moved] = layers.splice(i, 1);
+            layers.splice(i + 1, 0, moved);
+            if (selectedLayerIndex === i) selectedLayerIndex = i + 1;
+            else if (selectedLayerIndex === i + 1) selectedLayerIndex = i;
+            layersCacheDirty = true;
+            updateThumbnails(); updateLayersUI(); pushHistory(); requestRender();
+        };
+        reorderWrap.appendChild(moveUpBtn);
+
+        const moveDownBtn = document.createElement('button');
+        moveDownBtn.className = 'layer-reorder-btn';
+        moveDownBtn.title = 'Bajar capa';
+        moveDownBtn.innerHTML = '<img src="iconos acciones de capas/flecha abajo.png" alt="Bajar">';
+        moveDownBtn.disabled = (i === 0); // ya está abajo del todo
+        moveDownBtn.onclick = (e) => {
+            e.stopPropagation();
+            if (i <= 0) return;
+            endPushSession();
+            const [moved] = layers.splice(i, 1);
+            layers.splice(i - 1, 0, moved);
+            if (selectedLayerIndex === i) selectedLayerIndex = i - 1;
+            else if (selectedLayerIndex === i - 1) selectedLayerIndex = i;
+            layersCacheDirty = true;
+            updateThumbnails(); updateLayersUI(); pushHistory(); requestRender();
+        };
+        reorderWrap.appendChild(moveDownBtn);
+
+        mainInfo.appendChild(reorderWrap);
         li.appendChild(mainInfo);
         const controls = document.createElement('div');
         controls.className = 'layer-controls';

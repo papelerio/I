@@ -28,6 +28,16 @@ let chromaLassoMode = 'none'; // 'none', 'add' (regenerador), 'sub' (eliminador)
 let multitoneCount = 1;
 let multitoneColors = ['#00ffcc', '#11002c', '#ff0055', '#ffea00', '#0088ff', '#ff8800', '#ffffff'];
 
+// Malla de pines (warp mesh) state
+let warpCols = 4;
+let warpRows = 4;
+let warpPoints = [];
+let warpSelectedPointIndex = -1;
+let warpOriginalCanvas = null;
+let warpResultCanvas = null;
+let warpResultCtx = null;
+
+
 function selectChromaLasso(mode) {
     const lassoBtns = document.querySelectorAll('.chroma-lasso-btn');
     if (chromaLassoMode === mode) {
@@ -218,6 +228,24 @@ function openFilterModal(type) {
         multitoneCount = 1;
         multitoneColors = ['#00ffcc', '#11002c', '#ff0055', '#ffea00', '#0088ff', '#ff8800', '#ffffff'];
         buildMultitoneUI(container);
+    } else if (type === 'warp') {
+        title.textContent = 'Malla de Pines';
+        desc.textContent = 'Arrastra los pines para deforma la imagen. Ajusta las divisiones abajo.';
+        
+        warpCols = 4;
+        warpRows = 4;
+        initWarpGrid();
+        
+        addFilterSlider('Columnas', 2, 10, warpCols, (v) => {
+            warpCols = v;
+            initWarpGrid();
+            applyFilters();
+        });
+        addFilterSlider('Filas', 2, 10, warpRows, (v) => {
+            warpRows = v;
+            initWarpGrid();
+            applyFilters();
+        });
     }
 
     filterModal.classList.remove('hidden');
@@ -623,8 +651,75 @@ function makeDraggable(el, handle) {
 
 function applyFilters() {
     if (!filterOriginalImgData) return;
-    const sliders = document.getElementById('filter-controls-container').querySelectorAll('input[type="range"]');
     const l = layers[selectedLayerIndex];
+
+    // Optimización crítica para Malla de Pines: Renderizado directo por GPU (sin bucles JS ni ImageData)
+    if (activeFilterType === 'warp') {
+        warpResultCtx.clearRect(0, 0, paperWidth, paperHeight);
+
+        // Deformar cuadrícula usando triángulos
+        for (let r = 0; r < warpRows - 1; r++) {
+            for (let c = 0; c < warpCols - 1; c++) {
+                const idxTL = r * warpCols + c;
+                const idxTR = r * warpCols + (c + 1);
+                const idxBL = (r + 1) * warpCols + c;
+                const idxBR = (r + 1) * warpCols + (c + 1);
+
+                const ptTL = warpPoints[idxTL];
+                const ptTR = warpPoints[idxTR];
+                const ptBL = warpPoints[idxBL];
+                const ptBR = warpPoints[idxBR];
+
+                // Triángulo 1: TL, TR, BL
+                drawWarpedTriangle(
+                    warpResultCtx, warpOriginalCanvas,
+                    ptTL.origX, ptTL.origY, ptTR.origX, ptTR.origY, ptBL.origX, ptBL.origY,
+                    ptTL.x, ptTL.y, ptTR.x, ptTR.y, ptBL.x, ptBL.y
+                );
+
+                // Triángulo 2: TR, BR, BL
+                drawWarpedTriangle(
+                    warpResultCtx, warpOriginalCanvas,
+                    ptTR.origX, ptTR.origY, ptBR.origX, ptBR.origY, ptBL.origX, ptBL.origY,
+                    ptTR.x, ptTR.y, ptBR.x, ptBR.y, ptBL.x, ptBL.y
+                );
+            }
+        }
+
+        // Limpiar y dibujar sobre la capa usando aceleración de GPU
+        l.ctx.clearRect(0, 0, paperWidth, paperHeight);
+
+        if (hasSelection && selectionCanvas && selCtx) {
+            // 1. Comenzar con la imagen original completa
+            l.ctx.drawImage(warpOriginalCanvas, 0, 0);
+
+            // 2. Borrar el área de la selección de la capa (igual que hace modify-sel)
+            //    para hacer sitio a los nuevos píxeles deformados
+            l.ctx.save();
+            l.ctx.globalCompositeOperation = 'destination-out';
+            l.ctx.drawImage(selectionCanvas, 0, 0);
+            l.ctx.restore();
+
+            // 3. Enmascarar el resultado deformado con la selección en maskBuffer
+            mctx.clearRect(0, 0, paperWidth, paperHeight);
+            mctx.drawImage(warpResultCanvas, 0, 0);
+            mctx.save();
+            mctx.globalCompositeOperation = 'destination-in';
+            mctx.drawImage(selectionCanvas, 0, 0);
+            mctx.restore();
+
+            // 4. Componer el warp enmascarado sobre la capa (ya sin los píxeles originales en esa zona)
+            l.ctx.drawImage(maskBuffer, 0, 0);
+        } else {
+            // Dibujar completo
+            l.ctx.drawImage(warpResultCanvas, 0, 0);
+        }
+
+        requestRender();
+        return; // Retorno inmediato para evitar bucles pesados de ImageData
+    }
+
+    const sliders = document.getElementById('filter-controls-container').querySelectorAll('input[type="range"]');
 
     // Create copy for processing
     const workingData = new ImageData(new Uint8ClampedArray(filterOriginalImgData.data), paperWidth, paperHeight);
@@ -982,6 +1077,23 @@ function applyFilters() {
         }
     }
 
+    // Limitar el filtro al área seleccionada si hay una selección activa
+    if (hasSelection && selectionCanvas && selCtx) {
+        const selData = selCtx.getImageData(0, 0, paperWidth, paperHeight).data;
+        const origData = filterOriginalImgData.data;
+        for (let i = 0; i < data.length; i += 4) {
+            const sa = selData[i + 3]; // Alpha de la selección (0 a 255)
+            if (sa < 255) {
+                const factor = sa / 255.0;
+                const invFactor = 1.0 - factor;
+                data[i]     = Math.round(origData[i] * invFactor + data[i] * factor);
+                data[i + 1] = Math.round(origData[i + 1] * invFactor + data[i + 1] * factor);
+                data[i + 2] = Math.round(origData[i + 2] * invFactor + data[i + 2] * factor);
+                data[i + 3] = Math.round(origData[i + 3] * invFactor + data[i + 3] * factor);
+            }
+        }
+    }
+
     l.ctx.putImageData(workingData, 0, 0);
     requestRender();
 }
@@ -997,6 +1109,14 @@ function commitFilter() {
     currentTool = (filterPrevTool && filterPrevTool !== 'none') ? filterPrevTool : 'pincel';
     chromaLassoMode = 'none';
     blackWhiteBgMode = 'transparent'; // Limpiar estado para próxima apertura
+    
+    // Clean up warp variables
+    warpPoints = [];
+    warpSelectedPointIndex = -1;
+    warpOriginalCanvas = null;
+    warpResultCanvas = null;
+    warpResultCtx = null;
+    
     layersCacheDirty = true;
     updateThumbnails(); updateLayersUI();
     requestRender();
@@ -1013,6 +1133,14 @@ function cancelFilter() {
     outlineCache.solid = null; outlineCache.outerDist = null; outlineCache.innerDist = null;
     currentTool = filterPrevTool;
     chromaLassoMode = 'none';
+
+    // Clean up warp variables
+    warpPoints = [];
+    warpSelectedPointIndex = -1;
+    warpOriginalCanvas = null;
+    warpResultCanvas = null;
+    warpResultCtx = null;
+
     requestRender();
 }
 
@@ -1057,4 +1185,106 @@ function hslToRgb(h, s, l) {
     }
     return [Math.round(r * 255), Math.round(g * 255), Math.round(b * 255)];
 }
+
+function initWarpGrid() {
+    warpPoints = [];
+    warpSelectedPointIndex = -1;
+
+    // Create original canvas snapshot if not exists or if dimensions changed
+    if (!warpOriginalCanvas) {
+        warpOriginalCanvas = document.createElement('canvas');
+    }
+    warpOriginalCanvas.width = paperWidth;
+    warpOriginalCanvas.height = paperHeight;
+    const oCtx = warpOriginalCanvas.getContext('2d');
+    oCtx.clearRect(0, 0, paperWidth, paperHeight);
+    oCtx.putImageData(filterOriginalImgData, 0, 0);
+
+    if (!warpResultCanvas) {
+        warpResultCanvas = document.createElement('canvas');
+        warpResultCtx = warpResultCanvas.getContext('2d');
+    }
+    warpResultCanvas.width = paperWidth;
+    warpResultCanvas.height = paperHeight;
+
+    // Determinar límites de la cuadrícula (enmarcar selección si está activa)
+    let startX = 0;
+    let startY = 0;
+    let gridW = paperWidth;
+    let gridH = paperHeight;
+
+    if (hasSelection && typeof getSelectionBounds === 'function') {
+        const bounds = getSelectionBounds();
+        if (bounds) {
+            startX = bounds.x;
+            startY = bounds.y;
+            gridW = bounds.w;
+            gridH = bounds.h;
+        }
+    }
+
+    // Populate points
+    for (let r = 0; r < warpRows; r++) {
+        for (let c = 0; c < warpCols; c++) {
+            const x = startX + c * (gridW / (warpCols - 1));
+            const y = startY + r * (gridH / (warpRows - 1));
+            warpPoints.push({
+                x: x,
+                y: y,
+                origX: x,
+                origY: y
+            });
+        }
+    }
+}
+
+function drawWarpedTriangle(ctx, img, x0, y0, x1, y1, x2, y2, u0, v0, u1, v1, u2, v2) {
+    const delta = (x0 - x2) * (y1 - y2) - (x1 - x2) * (y0 - y2);
+    if (Math.abs(delta) < 0.0001) return;
+
+    // Calcular el centroide del triángulo de destino
+    const cu = (u0 + u1 + u2) / 3;
+    const cv = (v0 + v1 + v2) / 3;
+
+    // Expandir vértices ligeramente (0.8px) hacia afuera del centroide
+    // Esto hace que los triángulos colindantes se solapen un poco, eliminando las líneas de costura
+    const pad = 0.8;
+    
+    const d0x = u0 - cu; const d0y = v0 - cv;
+    const l0 = Math.hypot(d0x, d0y) || 1;
+    const eu0 = u0 + (d0x / l0) * pad;
+    const ev0 = v0 + (d0y / l0) * pad;
+
+    const d1x = u1 - cu; const d1y = v1 - cv;
+    const l1 = Math.hypot(d1x, d1y) || 1;
+    const eu1 = u1 + (d1x / l1) * pad;
+    const ev1 = v1 + (d1y / l1) * pad;
+
+    const d2x = u2 - cu; const d2y = v2 - cv;
+    const l2 = Math.hypot(d2x, d2y) || 1;
+    const eu2 = u2 + (d2x / l2) * pad;
+    const ev2 = v2 + (d2y / l2) * pad;
+
+    ctx.save();
+    ctx.beginPath();
+    ctx.moveTo(eu0, ev0);
+    ctx.lineTo(eu1, ev1);
+    ctx.lineTo(eu2, ev2);
+    ctx.closePath();
+    ctx.clip();
+
+    const r_delta = 1.0 / delta;
+    const a = ((y1 - y2) * (u0 - u2) - (y0 - y2) * (u1 - u2)) * r_delta;
+    const c = (-(x1 - x2) * (u0 - u2) + (x0 - x2) * (u1 - u2)) * r_delta;
+    const e = u2 - a * x2 - c * y2;
+
+    const b = ((y1 - y2) * (v0 - v2) - (y0 - y2) * (v1 - v2)) * r_delta;
+    const d = (-(x1 - x2) * (v0 - v2) + (x0 - x2) * (v1 - v2)) * r_delta;
+    const f = v2 - b * x2 - d * y2;
+
+    ctx.transform(a, b, c, d, e, f);
+    ctx.drawImage(img, 0, 0);
+    ctx.restore();
+}
+
 

@@ -39,6 +39,38 @@ function handlePointerDown(e) {
         }
         if (currentTool === 'zoom' || currentTool === 'pan' || e.button === 1 || isSpacePressed) { /* ok */ }
         else return;
+    } else if (activeFilterType === 'warp') {
+        if (warpPoints && warpPoints.length > 0) {
+            let bestIdx = -1;
+            let bestDist = Infinity;
+            warpPoints.forEach((pt, index) => {
+                const dist = Math.hypot(world.x - pt.x, world.y - pt.y);
+                if (dist < bestDist) {
+                    bestDist = dist;
+                    bestIdx = index;
+                }
+            });
+            const screenDist = bestDist * viewScale;
+            if (screenDist < 20 && bestIdx !== -1) {
+                // Click sobre un pin: capturarlo para arrastre
+                warpSelectedPointIndex = bestIdx;
+                isDrawing = true;
+                canvas.setPointerCapture(e.pointerId);
+                e.preventDefault();
+                requestRender();
+                return;
+            } else {
+                // Click lejos de cualquier pin: respetar la herramienta activa
+                if (currentTool === 'pan' || currentTool === 'zoom' || e.button === 1 || isSpacePressed) {
+                    // caer al flujo normal de la herramienta seleccionada (pan o zoom)
+                } else {
+                    // Herramienta no compatible: bloquear el evento
+                    e.preventDefault();
+                    requestRender();
+                    return;
+                }
+            }
+        }
     }
 
     if (e.button === 1 || isSpacePressed) {
@@ -66,17 +98,29 @@ function handlePointerDown(e) {
     else if (isResizingCanvas) {
         const handle = getCanvasResizeHandle(world.x, world.y);
         if (handle) {
+            // Handle encontrado: capturarlo para arrastre
             resizeActiveHandle = handle;
             resizeStartMouse = { x: world.x, y: world.y };
             resizeStartDim = { w: resizePreviewW, h: resizePreviewH };
             resizeStartOffsetX = resizeOffsetX;
             resizeStartOffsetY = resizeOffsetY;
             canvas.setPointerCapture(e.pointerId);
+            isDrawing = false;
+            e.preventDefault();
+            requestRender();
+            return;
+        } else {
+            // Fuera de los handles: respetar la herramienta activa
+            if (currentTool === 'pan' || currentTool === 'zoom' || e.button === 1 || isSpacePressed) {
+                // caer al flujo normal de pan o zoom
+            } else {
+                // Herramienta no compatible: bloquear
+                isDrawing = false;
+                e.preventDefault();
+                requestRender();
+                return;
+            }
         }
-        isDrawing = false;
-        e.preventDefault();
-        requestRender();
-        return;
     }
     else if (currentTool === 'bucket') { executeBucket(world.x, world.y); }
     else if (currentTool === 'eyedropper') {
@@ -195,7 +239,7 @@ function handlePointerMove(e) {
     screenCursorX = e.offsetX; screenCursorY = e.offsetY;
     // Canvas resize drag is independent of isDrawing
     if (isResizingCanvas) {
-        // Update cursor based on which handle is hovered
+        // Actualizar cursor según el handle bajo el puntero
         if (!resizeActiveHandle) {
             const world2 = screenToWorld(e.offsetX, e.offsetY);
             const hov = getCanvasResizeHandle(world2.x, world2.y);
@@ -203,6 +247,7 @@ function handlePointerMove(e) {
             canvas.style.cursor = hov ? (cursorMap[hov] || 'crosshair') : 'default';
         }
         if (resizeActiveHandle) {
+            // Drag activo sobre un handle: manejarlo y retornar
             e.preventDefault();
             const world = screenToWorld(e.offsetX, e.offsetY);
             const dx = world.x - resizeStartMouse.x;
@@ -211,28 +256,24 @@ function handlePointerMove(e) {
             if (resizeActiveHandle === 'move') {
                 resizeOffsetX -= dx;
                 resizeOffsetY -= dy;
-                resizeStartMouse = { x: world.x, y: world.y }; // update for next move
+                resizeStartMouse = { x: world.x, y: world.y };
             } else {
                 const res = applyCanvasResizeDrag(dx, dy, resizeActiveHandle, resizeStartDim.w, resizeStartDim.h);
                 resizePreviewW = res.nw;
                 resizePreviewH = res.nh;
 
                 if (resizeLibre) {
-                    // Update offsets to keep the correct edges pinned
-                    // Since we already calculated res.dox/doy based on origW/H
-                    // we need to add the incremental change or reset to start dim.
-                    // To avoid accumulation errors, we use the diff from startDim.
                     resizeOffsetX = resizeStartOffsetX + res.dox;
                     resizeOffsetY = resizeStartOffsetY + res.doy;
                 }
 
-                // Sync back to inputs
                 document.getElementById('resize-width').value = resizePreviewW;
                 document.getElementById('resize-height').value = resizePreviewH;
             }
+            requestRender();
+            return;
         }
-        requestRender();
-        return;
+        // Sin handle activo: caer al flujo normal para que pan/zoom funcionen
     }
 
     if (!isDrawing) {
@@ -242,6 +283,18 @@ function handlePointerMove(e) {
     applyCursor(true); // Re-force cursor visibility during move to fight aggressive browser hiding
     e.preventDefault();
     const world = screenToWorld(e.offsetX, e.offsetY);
+
+    if (activeFilterType === 'warp' && warpSelectedPointIndex !== -1) {
+        // Solo interceptar si hay un pin capturado; si no, el flujo de pan sigue normal
+        if (warpPoints[warpSelectedPointIndex]) {
+            const pt = warpPoints[warpSelectedPointIndex];
+            pt.x = Math.max(-500, Math.min(paperWidth + 500, world.x));
+            pt.y = Math.max(-500, Math.min(paperHeight + 500, world.y));
+            applyFilters();
+        }
+        requestRender();
+        return;
+    }
 
     if (currentTool === 'pan') { viewPosX += e.movementX; viewPosY += e.movementY; }
     else if (currentTool === 'push') {
@@ -390,6 +443,14 @@ function handlePointerUp(e) {
     if (!isDrawing) return;
     canvas.releasePointerCapture(e.pointerId);
     applyCursor(false);
+
+    if (activeFilterType === 'warp' && warpSelectedPointIndex !== -1) {
+        // Solo interceptar si se estaba arrastrando un pin; si era paneo, flujo normal
+        warpSelectedPointIndex = -1;
+        isDrawing = false;
+        requestRender();
+        return;
+    }
 
     if (currentTool === 'lazo-sel') {
         if (lassoSelPath.length >= 3) {

@@ -128,6 +128,18 @@
                 </div>
             </div>
 
+            <!-- Botones de rotación del lienzo -->
+            <div style="display:flex; gap:8px; justify-content:center; align-items:center;">
+                <button id="rotate-canvas-left-btn" class="canvas-rotate-btn" title="Rotar lienzo 90° a la izquierda">
+                    <img src="iconos preferencias/ROTAR a la isquierda.png" alt="Rotar izquierda">
+                    <span>−90°</span>
+                </button>
+                <button id="rotate-canvas-right-btn" class="canvas-rotate-btn" title="Rotar lienzo 90° a la derecha">
+                    <img src="iconos preferencias/ROTAR a la derecha.png" alt="Rotar derecha">
+                    <span>+90°</span>
+                </button>
+            </div>
+
             <div class="anchor-grid-container">
                 <label
                     style="font-size:10px; font-weight:700; color:#888; text-align:center; display:block; margin-bottom:8px;">ANCLAR
@@ -303,6 +315,10 @@
                         <button class="filter-icon-btn filter-opt-btn" data-filter="multitone" title="Multitono">
                             <img src="iconos filtros/multitono.png" alt="Multitono">
                             <span>Multitono</span>
+                        </button>
+                        <button class="filter-icon-btn filter-opt-btn" data-filter="warp" title="Malla de pines">
+                            <img src="iconos filtros/maya de pines.png" alt="Malla de pines">
+                            <span>Malla de pines</span>
                         </button>
                     </div>
                 </div>

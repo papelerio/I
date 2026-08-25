@@ -1,4 +1,4 @@
-﻿// ─────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────
 //  FULLSCREEN
 // ─────────────────────────────────────────────────────────────
 function toggleFullscreen() {
@@ -166,3 +166,89 @@ function resizeCanvas(newW, newH, anchor = 'tl') {
     pushHistory(); // snapshot AFTER resize
 }
 
+/**
+ * Rota todo el lienzo (y todas las capas) 90° a la derecha o a la izquierda.
+ * direction: 'cw'  → sentido horario (derecha, +90°)
+ *            'ccw' → sentido antihorario (izquierda, −90°)
+ *
+ * La rotación se hace desde el centro del lienzo actual, de modo que
+ * cualquier valor de ancho/alto/offset previamente configurado queda
+ * correctamente incorporado: el nuevo ancho = alto anterior y viceversa.
+ */
+function rotateCanvas(direction) {
+    endPushSession();
+
+    const oldW = paperWidth;
+    const oldH = paperHeight;
+    const newW = oldH;   // tras rotar 90° el ancho y el alto se intercambian
+    const newH = oldW;
+
+    // Función auxiliar: dibuja un canvas fuente rotado sobre uno nuevo
+    function rotateLayerCanvas(srcCanvas) {
+        const dst = document.createElement('canvas');
+        dst.width  = newW;
+        dst.height = newH;
+        const ctx = dst.getContext('2d');
+        ctx.translate(newW / 2, newH / 2);
+        ctx.rotate(direction === 'cw' ? Math.PI / 2 : -Math.PI / 2);
+        ctx.drawImage(srcCanvas, -oldW / 2, -oldH / 2);
+        return dst;
+    }
+
+    // Rotar todas las capas
+    layers.forEach(l => {
+        const rotated = rotateLayerCanvas(l.canvas);
+        l.canvas = rotated;
+        l.ctx    = rotated.getContext('2d', { willReadFrequently: true });
+    });
+
+    // Actualizar dimensiones lógicas
+    paperWidth  = newW;
+    paperHeight = newH;
+
+    // Rotar buffers compartidos (solo redimensionar, no rotar su contenido)
+    const buffersToResize = [strokeCanvas, groupCanvas, maskBuffer,
+                              selectionOutlineCanvas, layersCacheCanvas];
+    buffersToResize.forEach(buf => {
+        buf.width  = newW;
+        buf.height = newH;
+    });
+    layersCacheDirty = true;
+
+    // Rotar canvas de selección si existe
+    if (selectionCanvas) {
+        const rotatedSel = rotateLayerCanvas(selectionCanvas);
+        selectionCanvas = rotatedSel;
+        selCtx = rotatedSel.getContext('2d');
+        if (!hasSelection) selCtx.clearRect(0, 0, newW, newH);
+    }
+    updateSelectionOutline();
+
+    // Actualizar inputs del panel para reflejar el nuevo tamaño
+    const wInput = document.getElementById('resize-width');
+    const hInput = document.getElementById('resize-height');
+    if (wInput) wInput.value = newW;
+    if (hInput) hInput.value = newH;
+
+    // Sincronizar preview de resize
+    resizePreviewW = newW;
+    resizePreviewH = newH;
+    resizeOffsetX  = 0;
+    resizeOffsetY  = 0;
+
+    // Ajustar vista para que el lienzo rotado quepa en pantalla
+    const winW = canvas.parentElement.clientWidth;
+    const winH = canvas.parentElement.clientHeight;
+    viewScale = Math.min(winW / (newW + 100), winH / (newH + 100));
+    viewPosX  = 0;
+    viewPosY  = 0;
+
+    updateThumbnails();
+    updateLayersUI();
+    pushHistory();
+    requestRender();
+}
+
+// ── Listeners de los botones de rotación ──
+document.getElementById('rotate-canvas-left-btn').onclick  = () => rotateCanvas('ccw');
+document.getElementById('rotate-canvas-right-btn').onclick = () => rotateCanvas('cw');

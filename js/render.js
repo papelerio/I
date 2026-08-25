@@ -375,6 +375,65 @@ function render() {
         ctx.restore();
     }
 
+    // ── Draw warp mesh grid ──
+    if (activeFilterType === 'warp' && warpPoints && warpPoints.length > 0) {
+        ctx.save();
+
+        // Draw grid lines
+        ctx.strokeStyle = 'rgba(0, 150, 255, 0.55)';
+        ctx.lineWidth = 1.5 / viewScale;
+
+        // Horizontal lines
+        for (let r = 0; r < warpRows; r++) {
+            ctx.beginPath();
+            const startPt = warpPoints[r * warpCols];
+            ctx.moveTo(startPt.x, startPt.y);
+            for (let c = 1; c < warpCols; c++) {
+                const pt = warpPoints[r * warpCols + c];
+                ctx.lineTo(pt.x, pt.y);
+            }
+            ctx.stroke();
+        }
+
+        // Vertical lines
+        for (let c = 0; c < warpCols; c++) {
+            ctx.beginPath();
+            const startPt = warpPoints[c];
+            ctx.moveTo(startPt.x, startPt.y);
+            for (let r = 1; r < warpRows; r++) {
+                const pt = warpPoints[r * warpCols + c];
+                ctx.lineTo(pt.x, pt.y);
+            }
+            ctx.stroke();
+        }
+
+        // Draw pins
+        warpPoints.forEach((pt, index) => {
+            const isSelected = (index === warpSelectedPointIndex);
+
+            // Draw outer dot
+            ctx.beginPath();
+            ctx.arc(pt.x, pt.y, 7 / viewScale, 0, Math.PI * 2);
+            ctx.fillStyle = isSelected ? '#ff3d71' : '#00e5ff';
+            ctx.fill();
+
+            // Draw inner white dot
+            ctx.beginPath();
+            ctx.arc(pt.x, pt.y, 2.5 / viewScale, 0, Math.PI * 2);
+            ctx.fillStyle = 'white';
+            ctx.fill();
+
+            // Outline
+            ctx.beginPath();
+            ctx.arc(pt.x, pt.y, 7 / viewScale, 0, Math.PI * 2);
+            ctx.strokeStyle = '#004080';
+            ctx.lineWidth = 1.2 / viewScale;
+            ctx.stroke();
+        });
+
+        ctx.restore();
+    }
+
     // ── Draw filter lasso preview ──
     if (activeFilterType === 'chroma' && isDrawing && (chromaLassoMode === 'add' || chromaLassoMode === 'sub' || chromaLassoMode === 'clear') && lassoPath.length > 1) {
         ctx.save();

@@ -118,6 +118,21 @@ async function saveCurrentProject() {
     thumbCanvas.width = thumbW;
     thumbCanvas.height = thumbH;
     const tctx = thumbCanvas.getContext('2d');
+
+    // Simulate background to prevent transparent areas from turning black in JPEG thumbnail
+    if (bgMode === 1) {
+        tctx.fillStyle = solidBgColor;
+        tctx.fillRect(0, 0, thumbW, thumbH);
+    } else if (bgMode === 2) {
+        const pat = tctx.createPattern(checkerPatternDarkCanvas, 'repeat');
+        tctx.fillStyle = pat;
+        tctx.fillRect(0, 0, thumbW, thumbH);
+    } else {
+        const pat = tctx.createPattern(checkerPatternLightCanvas, 'repeat');
+        tctx.fillStyle = pat;
+        tctx.fillRect(0, 0, thumbW, thumbH);
+    }
+
     tctx.drawImage(flat, 0, 0, thumbW, thumbH);
 
     const thumbDataURL = thumbCanvas.toDataURL('image/jpeg', 0.92);
@@ -130,6 +145,8 @@ async function saveCurrentProject() {
         w: paperWidth, h: paperHeight,
         thumb: thumbDataURL,
         savedAt: Date.now(),
+        bgMode: bgMode,
+        solidBgColor: solidBgColor,
         layers: layers.map(l => ({
             name: l.name,
             opacity: l.opacity,
@@ -159,6 +176,10 @@ async function loadProject(id) {
     currentProjectTime = project.time || 0;
     currentProjectOrder = project.order !== undefined ? project.order : 0;
 
+    // Restaurar configuración de fondo (retrocompatible: proyectos viejos usan modo 1 blanco)
+    bgMode = project.bgMode !== undefined ? project.bgMode : 1;
+    solidBgColor = project.solidBgColor || '#ffffff';
+
     paperWidth = project.w; paperHeight = project.h;
     setupLogicalCanvas();
     layers = [];
@@ -185,6 +206,7 @@ async function loadProject(id) {
     // Reset history for fresh project load
     historyStack = []; historyIndex = -1;
     updateThumbnails(); updateLayersUI();
+    updateBgUI(); // sincronizar ícono del botón de fondo
     pushHistory(); // seed history with loaded state
 
     // Hide gallery, show editor
@@ -410,11 +432,22 @@ async function duplicateProject(id) {
     menu.id = 'gallery-context-menu';
     menu.style.display = 'none';
     menu.innerHTML = `
+        <div class="gallery-ctx-item" id="gctx-edit">
+            <span class="gallery-ctx-icon">🎨</span> Editar
+        </div>
+        <div class="gallery-ctx-separator"></div>
         <div class="gallery-ctx-item" id="gctx-rename">
             <span class="gallery-ctx-icon">✏️</span> Renombrar
         </div>
         <div class="gallery-ctx-item" id="gctx-duplicate">
             <span class="gallery-ctx-icon">📋</span> Duplicar
+        </div>
+        <div class="gallery-ctx-separator"></div>
+        <div class="gallery-ctx-item" id="gctx-copy">
+            <span class="gallery-ctx-icon">🖼️</span> Copiar imagen
+        </div>
+        <div class="gallery-ctx-item" id="gctx-download">
+            <span class="gallery-ctx-icon">⬇️</span> Descargar PNG
         </div>
         <div class="gallery-ctx-separator"></div>
         <div class="gallery-ctx-item danger" id="gctx-delete">
@@ -428,7 +461,7 @@ async function duplicateProject(id) {
     function showMenu(x, y, id) {
         targetId = id;
         menu.style.display = 'block';
-        const mw = 180, mh = 148;
+        const mw = 180, mh = 270;
         const left = x + mw > window.innerWidth  ? x - mw : x;
         const top  = y + mh > window.innerHeight ? y - mh : y;
         menu.style.left = left + 'px';
@@ -444,14 +477,111 @@ async function duplicateProject(id) {
         targetId = null;
     }
 
+    /**
+     * Reconstruye la imagen completa a resolución nativa cargando todas las capas
+     * desde IndexedDB y composicionándolas, igual que getFlatImage() en el editor.
+     * Devuelve { canvas, title } o null si no se encuentra el proyecto.
+     */
+    async function renderProjectFullRes(id) {
+        const db = await getDB();
+        const tx = db.transaction('slots', 'readonly');
+        const project = await new Promise(res => tx.objectStore('slots').get(id).onsuccess = e => res(e.target.result));
+        if (!project) return null;
+
+        const w = project.w || 1920;
+        const h = project.h || 1080;
+
+        // Cargar todas las capas como imágenes de forma asíncrona
+        const layerImages = await Promise.all((project.layers || []).map(lData =>
+            new Promise(res => {
+                const img = new Image();
+                img.onload = () => res({ img, lData });
+                img.onerror = () => res(null);
+                img.src = lData.data;
+            })
+        ));
+
+        // Crear canvas de salida a resolución completa
+        const flat = document.createElement('canvas');
+        flat.width = w;
+        flat.height = h;
+        const fctx = flat.getContext('2d');
+
+        // Pintar fondo sólido si está configurado en el proyecto (por defecto modo 1, color blanco)
+        const projBgMode = project.bgMode !== undefined ? project.bgMode : 1;
+        const projSolidColor = project.solidBgColor || '#ffffff';
+        if (projBgMode === 1) {
+            fctx.fillStyle = projSolidColor;
+            fctx.fillRect(0, 0, w, h);
+        }
+
+        // Composicionar capas en orden (índice 0 = fondo)
+        for (const entry of layerImages) {
+            if (!entry) continue;
+            const { img, lData } = entry;
+            if (lData.visible === false) continue;
+            fctx.save();
+            fctx.globalAlpha = (lData.opacity !== undefined) ? lData.opacity : 1.0;
+            fctx.globalCompositeOperation = lData.blend || 'source-over';
+            fctx.drawImage(img, 0, 0, w, h);
+            fctx.restore();
+        }
+
+        return { canvas: flat, title: project.title || 'proyecto' };
+    }
+
+    // ── Editar ──────────────────────────────────────────────────
+    document.getElementById('gctx-edit').addEventListener('click', () => {
+        const id = targetId; hideMenu();
+        if (id) loadProject(id);
+    });
+
+    // ── Renombrar ───────────────────────────────────────────────
     document.getElementById('gctx-rename').addEventListener('click', () => {
         const id = targetId; hideMenu();
         if (id) renameProject(id);
     });
+
+    // ── Duplicar ────────────────────────────────────────────────
     document.getElementById('gctx-duplicate').addEventListener('click', () => {
         const id = targetId; hideMenu();
         if (id) duplicateProject(id);
     });
+
+    // ── Copiar imagen al portapapeles ────────────────────────────
+    document.getElementById('gctx-copy').addEventListener('click', async () => {
+        const id = targetId; hideMenu();
+        if (!id) return;
+        const btn = document.getElementById('gctx-copy');
+        if (btn) btn.textContent = '⏳ Procesando…';
+        const data = await renderProjectFullRes(id);
+        if (!data) { if (btn) btn.innerHTML = '<span class="gallery-ctx-icon">🖼️</span> Copiar imagen'; alert('No se pudo cargar el proyecto.'); return; }
+        try {
+            const pngBlob = await new Promise(res => data.canvas.toBlob(res, 'image/png'));
+            await navigator.clipboard.write([
+                new ClipboardItem({ 'image/png': pngBlob })
+            ]);
+            if (btn) { btn.textContent = '✅ Copiado'; setTimeout(() => { btn.innerHTML = '<span class="gallery-ctx-icon">🖼️</span> Copiar imagen'; }, 1800); }
+        } catch (err) {
+            console.warn('No se pudo copiar:', err);
+            if (btn) btn.innerHTML = '<span class="gallery-ctx-icon">🖼️</span> Copiar imagen';
+            alert('No se pudo copiar la imagen. El navegador puede requerir permisos.');
+        }
+    });
+
+    // ── Descargar PNG ────────────────────────────────────────────
+    document.getElementById('gctx-download').addEventListener('click', async () => {
+        const id = targetId; hideMenu();
+        if (!id) return;
+        const data = await renderProjectFullRes(id);
+        if (!data) { alert('No se pudo cargar el proyecto.'); return; }
+        const a = document.createElement('a');
+        a.href = data.canvas.toDataURL('image/png');
+        a.download = (data.title.replace(/[<>:"/\\|?*]/g, '_') || 'proyecto') + '.png';
+        a.click();
+    });
+
+    // ── Eliminar ─────────────────────────────────────────────────
     document.getElementById('gctx-delete').addEventListener('click', () => {
         const id = targetId; hideMenu();
         if (id) deleteProject(id);
@@ -473,3 +603,4 @@ async function duplicateProject(id) {
         showMenu(e.clientX, e.clientY, item.dataset.id);
     });
 })();
+

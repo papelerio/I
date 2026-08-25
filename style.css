@@ -853,7 +853,55 @@ body:not(.theme-classic) .tool-btn img {
 .layer-main-info {
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 6px;
+}
+
+/* Contenedor de los dos botones de reordenar */
+.layer-reorder-btns {
+    display: flex;
+    flex-direction: row;
+    gap: 3px;
+    margin-left: 2px;
+    flex-shrink: 0;
+}
+
+/* Botón circular flecha arriba/abajo */
+.layer-reorder-btn {
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    background: rgba(255, 255, 255, 0.08);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    transition: background 0.18s, transform 0.12s, opacity 0.18s;
+    flex-shrink: 0;
+}
+
+.layer-reorder-btn:hover:not(:disabled) {
+    background: rgba(27, 197, 38, 0.25);
+    border-color: rgba(27, 197, 38, 0.5);
+    transform: scale(1.12);
+}
+
+.layer-reorder-btn:active:not(:disabled) {
+    transform: scale(0.92);
+    background: rgba(27, 197, 38, 0.4);
+}
+
+.layer-reorder-btn:disabled {
+    opacity: 0.25;
+    cursor: default;
+}
+
+.layer-reorder-btn img {
+    width: 12px;
+    height: 12px;
+    object-fit: contain;
+    pointer-events: none;
 }
 
 .layer-thumbnail {
@@ -1225,6 +1273,44 @@ body:not(.theme-classic) .tool-btn img {
     border-radius: 8px;
     padding: 12px;
     font-size: 12px;
+}
+
+/* ── Botones de rotación del lienzo ── */
+.canvas-rotate-btn {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    flex: 1;
+    padding: 8px 6px;
+    border: 1px solid #ccc;
+    border-radius: 10px;
+    background: #f5f5f5;
+    color: #444;
+    cursor: pointer;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.03em;
+    transition: background 0.18s, border-color 0.18s, transform 0.12s;
+}
+
+.canvas-rotate-btn:hover {
+    background: #e0ecff;
+    border-color: #0066ff;
+    color: #0052cc;
+}
+
+.canvas-rotate-btn:active {
+    transform: scale(0.94);
+    background: #c8dcff;
+}
+
+.canvas-rotate-btn img {
+    width: 28px;
+    height: 28px;
+    object-fit: contain;
+    pointer-events: none;
 }
 
 /* Eyedropper Preview Loupe */
