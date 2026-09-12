@@ -71,6 +71,15 @@
             <h1>Bienvenido a Pro Illustrator</h1>
             <p>Configura tu espacio de trabajo</p>
             <div class="input-field" style="margin-bottom: 15px; text-align: left;">
+                <label style="display: block; margin-bottom: 5px; font-size: 14px; color: #ccc;">Tipo de Proyecto</label>
+                <select id="project-type-select"
+                    style="width: 100%; padding: 8px; border-radius: 5px; background: #222; color: white; border: 1px solid #444; outline: none; cursor: pointer;">
+                    <option value="illustration">🎨 Ilustración (Estándar)</option>
+                    <option value="animation">🎬 Animación (Fotogramas)</option>
+                </select>
+            </div>
+
+            <div class="input-field" style="margin-bottom: 15px; text-align: left;">
                 <label style="display: block; margin-bottom: 5px; font-size: 14px; color: #ccc;">Plantillas de
                     Tamaño</label>
                 <select id="canvas-preset-select"
@@ -527,6 +536,38 @@
             </div>
             <canvas id="drawing-canvas"></canvas>
         </main>
+
+        <!-- Barra Inferior de Animación (Flotante y Semitransparente) -->
+        <div id="animation-bottom-bar" class="animation-bottom-bar hidden">
+            <button id="add-frame-btn" class="anim-btn add-btn" title="Añadir fotograma">+</button>
+            <div id="animation-frames-strip" class="animation-frames-strip">
+                <!-- Miniaturas de fotogramas generadas dinámicamente -->
+            </div>
+            <div class="animation-controls">
+                <button id="anim-play-btn" class="anim-btn play-btn" title="Reproducir / Pausar">▶</button>
+                <span id="anim-frame-counter" class="anim-frame-counter">1 / 1</span>
+                <div class="anim-fps-container">
+                    <label for="anim-fps-input">FPS:</label>
+                    <input type="number" id="anim-fps-input" min="1" max="60" value="12">
+                </div>
+                <div class="anim-fps-container" title="Visibilidad de papel cebolla (%)">
+                    <label for="anim-onion-input">V.cebolla:</label>
+                    <input type="number" id="anim-onion-input" min="0" max="100" value="20">%
+                </div>
+                <button id="anim-clear-onion-btn" class="anim-btn" style="padding: 3px 8px; font-size: 11px;" title="Restaurar / Quitar todas las guías cebolla">🧹 Limpiar guías</button>
+            </div>
+        </div>
+
+        <!-- Menú Contextual de Fotogramas (Click Derecho) -->
+        <div id="frame-context-menu" class="frame-context-menu hidden">
+            <button id="frame-ctx-onion" class="frame-ctx-item">🧅 Usar de guía cebolla</button>
+            <div class="frame-ctx-divider"></div>
+            <button id="frame-ctx-dup" class="frame-ctx-item">📋 Duplicar casilla</button>
+            <button id="frame-ctx-dup-end" class="frame-ctx-item">⏩ Duplicar al final</button>
+            <button id="frame-ctx-dup-start" class="frame-ctx-item">⏪ Duplicar al inicio</button>
+            <div class="frame-ctx-divider"></div>
+            <button id="frame-ctx-del" class="frame-ctx-item danger">🗑️ Eliminar casilla</button>
+        </div>
     </div>
 
     <!-- Filter Adjustment Panel (Floating) -->
@@ -572,6 +613,7 @@
     <script src="js/push-tool.js"></script>
     <script src="js/shape-render.js"></script>
     <script src="js/render.js"></script>
+    <script src="js/animation.js"></script>
     <script src="js/tools.js"></script>
     <script src="js/shortcuts.js"></script>
     <script src="js/init.js"></script>

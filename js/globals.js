@@ -248,6 +248,7 @@ let stabPoints = [];
 let stabOutX = null, stabOutY = null, stabOutP = null;
 let isSpacePressed = false;
 let isTemporaryPan = false;
+let prevTemporaryTool = null; // Almacena el id de herramienta antes del pan temporal
 
 // Lasso/Bucket State
 let lassoPath = [];
@@ -363,4 +364,31 @@ let paletteColors = []; let paletteRows = 5; const paletteCols = 5;
 
 // Layer System
 let layers = []; let selectedLayerIndex = 0; let bgMode = 1; let solidBgColor = '#ffffff';
+
+// Animation System State
+let isAnimationMode = false;
+let animationFrames = []; // Array of frame objects: { id, name, layers: [] }
+let currentFrameIndex = 0;
+let animationFPS = 12;
+let isAnimationPlaying = false;
+let animationInterval = null;
+let projectType = 'illustration'; // 'illustration' | 'animation'
+
+// Animation UI Elements
+const projectTypeSelect = document.getElementById('project-type-select');
+const animationBottomBar = document.getElementById('animation-bottom-bar');
+const animationFramesStrip = document.getElementById('animation-frames-strip');
+const addFrameBtn = document.getElementById('add-frame-btn');
+const animPlayBtn = document.getElementById('anim-play-btn');
+const animFrameCounter = document.getElementById('anim-frame-counter');
+const animFpsInput = document.getElementById('anim-fps-input');
+
+// Onion Skin (Guías Cebolla) State
+let onionSkinOpacity = 0.20; // Default 20%
+let onionSkinFrames = new Set(); // Set of frame IDs marked as onion skin guides
+const animOnionInput = document.getElementById('anim-onion-input');
+const animClearOnionBtn = document.getElementById('anim-clear-onion-btn');
+const frameCtxOnion = document.getElementById('frame-ctx-onion');
+
+
 

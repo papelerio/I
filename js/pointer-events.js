@@ -75,6 +75,7 @@ function handlePointerDown(e) {
 
     if (e.button === 1 || isSpacePressed) {
         isTemporaryPan = true;
+        prevTemporaryTool = currentTool; // Guardar herramienta actual para restaurar después
         currentTool = 'pan';
     } else {
         isTemporaryPan = false;
@@ -684,7 +685,10 @@ function handlePointerUp(e) {
     isDrawing = false; lassoPath = [];
     if (currentTool === 'pan' && isTemporaryPan) {
         if (activeFilterType) currentTool = 'none';
-        else {
+        else if (prevTemporaryTool) {
+            // Restaurar directamente desde el id guardado (funciona con push, pincel, etc.)
+            currentTool = prevTemporaryTool;
+        } else {
             const activeToolName = activeToolIndicator?.textContent || 'Pincel';
             const t = toolsData.find(x => x.name === activeToolName);
             if (t) currentTool = t.id;
@@ -692,6 +696,7 @@ function handlePointerUp(e) {
         }
         showSelectionButtons(currentTool);
         isTemporaryPan = false;
+        prevTemporaryTool = null;
     }
     if (currentTool === 'rotate') selectTool('pincel', lastBrushTool);
     requestRender();

@@ -1,0 +1,9 @@
+al dibujar un circulo, en la fase de modificar una selección, al desplazarla y mantener ctrl, que se cree un clon de este
+
+añadir un filtro de maya deformadora
+
+añadir un filtro para crear "repeticiones grilla"
+
+MEJORAR ilustración pixel
+
+añadir un filtro de "MARCO" o "grilla"..quetal ambas fucionadas

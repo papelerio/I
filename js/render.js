@@ -158,6 +158,11 @@ function render() {
         }
     }
 
+    // ── Onion Skin Overlay (Papel Cebolla) ──
+    if (typeof isAnimationMode !== 'undefined' && isAnimationMode && typeof renderOnionSkinOverlay === 'function') {
+        renderOnionSkinOverlay(ctx);
+    }
+
     // ── Canvas X-ray border (shown while modifying selection / pasting) ──
     if (currentTool === 'modify-sel' && modSelInitialized) {
         ctx.save();

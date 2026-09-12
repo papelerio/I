@@ -1,4 +1,4 @@
-﻿// ─────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────
 //  HISTORY (UNDO / REDO)
 // ─────────────────────────────────────────────────────────────
 const MAX_HISTORY = 40;
@@ -8,10 +8,16 @@ let _historyPaused = false; // internal flag to prevent recursive pushes during 
 
 /** Capture the current full state into a lightweight snapshot object */
 function captureHistoryState() {
+    if (typeof isAnimationMode !== 'undefined' && isAnimationMode && typeof saveCurrentFrameState === 'function') {
+        saveCurrentFrameState();
+    }
+
     return {
         paperWidth,
         paperHeight,
         selectedLayerIndex,
+        isAnimationMode: (typeof isAnimationMode !== 'undefined') ? isAnimationMode : false,
+        currentFrameIndex: (typeof currentFrameIndex !== 'undefined') ? currentFrameIndex : 0,
         layers: layers.map(l => ({
             id: l.id,
             name: l.name,
@@ -51,6 +57,10 @@ function pushHistory() {
     historyStack.push(captureHistoryState());
     if (historyStack.length > MAX_HISTORY) historyStack.shift();
     historyIndex = historyStack.length - 1;
+
+    if (typeof updateCurrentFrameThumbnail === 'function') {
+        updateCurrentFrameThumbnail();
+    }
 }
 
 /** Restore app state from a snapshot */
@@ -62,6 +72,21 @@ function restoreHistoryState(snapshot) {
         if (snapshot.paperWidth && snapshot.paperHeight) {
             paperWidth = snapshot.paperWidth;
             paperHeight = snapshot.paperHeight;
+        }
+
+        // Handle Animation Mode frame switching in history
+        if (snapshot.isAnimationMode && typeof animationFrames !== 'undefined' && animationFrames.length > 0) {
+            // Save active layers of current frame before switching
+            if (animationFrames[currentFrameIndex]) {
+                animationFrames[currentFrameIndex].layers = layers;
+            }
+            if (snapshot.currentFrameIndex !== undefined && snapshot.currentFrameIndex >= 0) {
+                if (snapshot.currentFrameIndex < animationFrames.length) {
+                    currentFrameIndex = snapshot.currentFrameIndex;
+                } else {
+                    currentFrameIndex = Math.max(0, animationFrames.length - 1);
+                }
+            }
         }
 
         // Resize all shared off-screen buffers to match restored dimensions
@@ -92,6 +117,14 @@ function restoreHistoryState(snapshot) {
             };
         });
         selectedLayerIndex = Math.max(0, Math.min(snapshot.selectedLayerIndex, layers.length - 1));
+
+        // Sync restored layers into animation frames structure if in animation mode
+        if (snapshot.isAnimationMode && typeof animationFrames !== 'undefined' && animationFrames[currentFrameIndex]) {
+            animationFrames[currentFrameIndex].layers = layers;
+            if (typeof updateFrameThumbnails === 'function') {
+                updateFrameThumbnails();
+            }
+        }
 
         // Restore selection
         hasSelection = snapshot.hasSelection;

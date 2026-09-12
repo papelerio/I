@@ -2438,3 +2438,329 @@ body:not(.theme-classic) .tool-btn img {
 .shortcut-modal-btn.cancel:hover {
     background: rgba(255, 255, 255, 0.12);
 }
+
+/* ═══════════════════════════════════════════════
+   BARRA INFERIOR DE ANIMACIÓN (FLOTANTE & SEMITRANSPARENTE)
+   ═══════════════════════════════════════════════ */
+.animation-bottom-bar {
+    position: absolute;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 1500;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 8px 14px;
+    background: rgba(18, 18, 22, 0.55);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 16px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.35);
+    opacity: 0.45;
+    transition: opacity 0.25s ease, transform 0.25s ease, background 0.25s ease;
+    max-width: 90vw;
+    user-select: none;
+}
+
+.animation-bottom-bar:hover,
+.animation-bottom-bar:focus-within {
+    opacity: 0.95;
+    background: rgba(18, 18, 22, 0.85);
+    box-shadow: 0 10px 36px rgba(0, 0, 0, 0.5);
+}
+
+.animation-frames-strip {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    overflow-x: auto;
+    max-width: 60vw;
+    padding: 4px 2px;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255,255,255,0.2) transparent;
+}
+
+.animation-frames-strip::-webkit-scrollbar {
+    height: 4px;
+}
+.animation-frames-strip::-webkit-scrollbar-thumb {
+    background: rgba(255,255,255,0.2);
+    border-radius: 4px;
+}
+
+/* Individual Frame Thumbnail Item */
+.frame-thumb-item {
+    position: relative;
+    width: 58px;
+    height: 58px;
+    border-radius: 10px;
+    background: #ffffff;
+    border: 2px solid rgba(255, 255, 255, 0.25);
+    cursor: pointer;
+    overflow: hidden;
+    flex-shrink: 0;
+    transition: all 0.2s ease;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+}
+
+.frame-thumb-item:hover {
+    transform: translateY(-2px);
+    border-color: rgba(255, 255, 255, 0.6);
+}
+
+.frame-thumb-item.active-frame {
+    border-color: #3b82f6;
+    box-shadow: 0 0 12px rgba(59, 130, 246, 0.6);
+    transform: scale(1.04);
+}
+
+.frame-thumb-item.onion-skin-active {
+    border-color: #facc15 !important;
+    box-shadow: 0 0 12px rgba(250, 204, 21, 0.8) !important;
+}
+
+.frame-thumb-item.active-frame.onion-skin-active {
+    border-color: #facc15 !important;
+    box-shadow: 0 0 14px rgba(250, 204, 21, 0.9), 0 0 0 2px #3b82f6 !important;
+}
+
+.frame-thumb-canvas {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    display: block;
+    pointer-events: none;
+    background-color: #ffffff;
+    background-image: 
+        linear-gradient(45deg, #e0e0e0 25%, transparent 25%), 
+        linear-gradient(-45deg, #e0e0e0 25%, transparent 25%),
+        linear-gradient(45deg, transparent 75%, #e0e0e0 75%),
+        linear-gradient(-45deg, transparent 75%, #e0e0e0 75%);
+    background-size: 12px 12px;
+    background-position: 0 0, 0 6px, 6px -6px, -6px 0px;
+}
+
+.frame-thumb-number {
+    position: absolute;
+    bottom: 2px;
+    left: 2px;
+    font-size: 10px;
+    font-weight: 700;
+    color: #ffffff;
+    background: rgba(0, 0, 0, 0.6);
+    padding: 1px 4px;
+    border-radius: 4px;
+    pointer-events: none;
+}
+
+/* Frame Item Actions Overlay */
+.frame-thumb-actions {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0,0,0,0.65);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    opacity: 0;
+    transition: opacity 0.15s ease;
+}
+
+.frame-thumb-item:hover .frame-thumb-actions {
+    opacity: 1;
+}
+
+.frame-thumb-action-btn {
+    background: rgba(255,255,255,0.2);
+    border: none;
+    color: white;
+    width: 22px;
+    height: 22px;
+    border-radius: 4px;
+    font-size: 11px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.15s;
+}
+
+.frame-thumb-action-btn:hover {
+    background: #3b82f6;
+}
+
+.frame-thumb-action-btn.delete-btn:hover {
+    background: #ef4444;
+}
+
+/* General Buttons in Anim Bar */
+.anim-btn {
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    color: white;
+    border-radius: 10px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 600;
+}
+
+.anim-btn:hover {
+    background: rgba(255, 255, 255, 0.25);
+    border-color: rgba(255, 255, 255, 0.4);
+}
+
+.anim-btn.add-btn {
+    width: 44px;
+    height: 44px;
+    font-size: 22px;
+    flex-shrink: 0;
+    background: rgba(59, 130, 246, 0.25);
+    border-color: rgba(59, 130, 246, 0.5);
+    color: #60a5fa;
+}
+
+.anim-btn.add-btn:hover {
+    background: rgba(59, 130, 246, 0.5);
+    color: #ffffff;
+    box-shadow: 0 0 10px rgba(59, 130, 246, 0.4);
+}
+
+.anim-btn.play-btn {
+    width: 38px;
+    height: 38px;
+    font-size: 16px;
+    background: rgba(34, 197, 94, 0.25);
+    border-color: rgba(34, 197, 94, 0.5);
+    color: #4ade80;
+}
+
+.anim-btn.play-btn:hover {
+    background: rgba(34, 197, 94, 0.5);
+    color: #ffffff;
+    box-shadow: 0 0 10px rgba(34, 197, 94, 0.4);
+}
+
+.anim-btn.play-btn.playing {
+    background: rgba(239, 68, 68, 0.3);
+    border-color: rgba(239, 68, 68, 0.6);
+    color: #f87171;
+}
+
+.animation-controls {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding-left: 8px;
+    border-left: 1px solid rgba(255, 255, 255, 0.15);
+    flex-shrink: 0;
+}
+
+.anim-frame-counter {
+    font-size: 12px;
+    font-weight: 600;
+    color: #ccc;
+    min-width: 40px;
+    text-align: center;
+}
+
+.anim-fps-container {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 11px;
+    color: #aaa;
+    font-weight: 600;
+}
+
+.anim-fps-container input {
+    width: 42px;
+    background: rgba(0, 0, 0, 0.4);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    color: white;
+    border-radius: 6px;
+    padding: 3px 6px;
+    font-size: 12px;
+    text-align: center;
+    outline: none;
+}
+
+.anim-fps-container input:focus {
+    border-color: #3b82f6;
+}
+
+/* ═══════════════════════════════════════════════
+   MENÚ CONTEXTUAL DE FOTOGRAMAS (CLICK DERECHO)
+   ═══════════════════════════════════════════════ */
+.frame-context-menu {
+    position: fixed;
+    z-index: 6000;
+    width: 170px;
+    background: rgba(22, 22, 28, 0.95);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 12px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6);
+    padding: 6px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    user-select: none;
+    animation: ctx-pop-in 0.15s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+@keyframes ctx-pop-in {
+    from {
+        opacity: 0;
+        transform: scale(0.92);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1);
+    }
+}
+
+.frame-ctx-item {
+    background: transparent;
+    border: none;
+    color: #e2e8f0;
+    padding: 8px 10px;
+    font-size: 12px;
+    font-weight: 500;
+    text-align: left;
+    border-radius: 6px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    transition: background 0.15s, color 0.15s;
+    width: 100%;
+}
+
+.frame-ctx-item:hover {
+    background: rgba(255, 255, 255, 0.12);
+    color: #ffffff;
+}
+
+.frame-ctx-item.danger {
+    color: #f87171;
+}
+
+.frame-ctx-item.danger:hover {
+    background: rgba(239, 68, 68, 0.2);
+    color: #fca5a5;
+}
+
+.frame-ctx-divider {
+    height: 1px;
+    background: rgba(255, 255, 255, 0.12);
+    margin: 4px 2px;
+}

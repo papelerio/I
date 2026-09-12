@@ -50,7 +50,8 @@ function selectTool(id, name) {
     if (currentTool === 'modify-sel' && id !== 'modify-sel' && modSelInitialized) commitModifySelection();
     if (currentTool === 'push') {
         const isTargetPush = (id === 'push' || (id === 'pincel' && name === 'Empujar'));
-        if (!isTargetPush) {
+        const isNavigation  = (id === 'zoom' || id === 'pan');  // Navegar no termina la sesión de empuje
+        if (!isTargetPush && !isNavigation) {
             endPushSession();
         }
     }

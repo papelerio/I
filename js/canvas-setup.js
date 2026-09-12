@@ -17,6 +17,11 @@ function createCheckerPattern() {
 function startApp(w, h, initialImg = null) {
     paperWidth = w || 1920; paperHeight = h || 1080;
     
+    // Configurar tipo de proyecto
+    const selectedType = (typeof projectTypeSelect !== 'undefined' && projectTypeSelect) ? projectTypeSelect.value : 'illustration';
+    projectType = selectedType;
+    isAnimationMode = (selectedType === 'animation');
+
     // Set up new project state
     currentProjectId = 'proj_' + Date.now();
     currentProjectTitle = 'Sin título';
@@ -25,6 +30,15 @@ function startApp(w, h, initialImg = null) {
     const winW = canvas.parentElement.clientWidth; const winH = canvas.parentElement.clientHeight;
     viewScale = Math.min(winW / (paperWidth + 100), winH / (paperHeight + 100));
     setupLogicalCanvas(initialImg);
+
+    if (isAnimationMode) {
+        initAnimationProject();
+    } else {
+        if (typeof animationBottomBar !== 'undefined' && animationBottomBar) {
+            animationBottomBar.classList.add('hidden');
+        }
+    }
+
     // Seed the history with the initial blank state
     historyStack = []; historyIndex = -1;
     pushHistory();

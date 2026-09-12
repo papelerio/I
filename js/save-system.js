@@ -137,6 +137,10 @@ async function saveCurrentProject() {
 
     const thumbDataURL = thumbCanvas.toDataURL('image/jpeg', 0.92);
 
+    if (typeof saveCurrentFrameState === 'function') {
+        saveCurrentFrameState();
+    }
+
     const project = {
         id: currentProjectId,
         title: currentProjectTitle,
@@ -147,6 +151,23 @@ async function saveCurrentProject() {
         savedAt: Date.now(),
         bgMode: bgMode,
         solidBgColor: solidBgColor,
+        projectType: projectType || 'illustration',
+        isAnimationMode: !!isAnimationMode,
+        currentFrameIndex: currentFrameIndex || 0,
+        animationFPS: animationFPS || 12,
+        animationFrames: isAnimationMode ? animationFrames.map(f => ({
+            id: f.id,
+            name: f.name,
+            layers: f.layers.map(l => ({
+                name: l.name,
+                opacity: l.opacity,
+                visible: l.visible,
+                blend: l.blendMode,
+                clipping: l.clippingMask,
+                alphaLocked: l.alphaLocked,
+                data: l.canvas.toDataURL()
+            }))
+        })) : null,
         layers: layers.map(l => ({
             name: l.name,
             opacity: l.opacity,
@@ -182,25 +203,80 @@ async function loadProject(id) {
 
     paperWidth = project.w; paperHeight = project.h;
     setupLogicalCanvas();
-    layers = [];
-    for (const lData of project.layers) {
-        const lCanvas = document.createElement('canvas'); lCanvas.width = paperWidth; lCanvas.height = paperHeight;
-        const lCtx = lCanvas.getContext('2d');
-        const img = await new Promise(res => { const i = new Image(); i.onload = () => res(i); i.src = lData.data; });
-        lCtx.drawImage(img, 0, 0);
-        layers.push({
-            id: Date.now() + Math.random(),
-            name: lData.name,
-            canvas: lCanvas,
-            ctx: lCtx,
-            visible: lData.visible,
-            opacity: lData.opacity,
-            blendMode: lData.blend || 'source-over',
-            clippingMask: !!lData.clipping,
-            alphaLocked: !!lData.alphaLocked,
-            thumbData: ''
-        });
+
+    projectType = project.projectType || 'illustration';
+    isAnimationMode = !!project.isAnimationMode;
+    animationFPS = project.animationFPS || 12;
+    currentFrameIndex = project.currentFrameIndex || 0;
+
+    if (isAnimationMode && project.animationFrames && project.animationFrames.length > 0) {
+        animationFrames = [];
+        for (const fData of project.animationFrames) {
+            const fLayers = [];
+            for (const lData of fData.layers) {
+                const lCanvas = document.createElement('canvas'); lCanvas.width = paperWidth; lCanvas.height = paperHeight;
+                const lCtx = lCanvas.getContext('2d');
+                const img = await new Promise(res => { const i = new Image(); i.onload = () => res(i); i.src = lData.data; });
+                lCtx.drawImage(img, 0, 0);
+                fLayers.push({
+                    id: Date.now() + Math.random(),
+                    name: lData.name,
+                    canvas: lCanvas,
+                    ctx: lCtx,
+                    visible: lData.visible,
+                    opacity: lData.opacity,
+                    blendMode: lData.blend || 'source-over',
+                    clippingMask: !!lData.clipping,
+                    alphaLocked: !!lData.alphaLocked
+                });
+            }
+            animationFrames.push({
+                id: fData.id,
+                name: fData.name,
+                layers: fLayers
+            });
+        }
+        if (currentFrameIndex >= animationFrames.length) currentFrameIndex = 0;
+        layers = animationFrames[currentFrameIndex].layers;
+
+        if (typeof animationBottomBar !== 'undefined' && animationBottomBar) {
+            animationBottomBar.classList.remove('hidden');
+        }
+        if (typeof animFpsInput !== 'undefined' && animFpsInput) {
+            animFpsInput.value = animationFPS;
+        }
+        if (typeof setupAnimationEvents === 'function') {
+            setupAnimationEvents();
+        }
+        if (typeof updateFrameThumbnails === 'function') {
+            updateFrameThumbnails();
+        }
+    } else {
+        isAnimationMode = false;
+        if (typeof animationBottomBar !== 'undefined' && animationBottomBar) {
+            animationBottomBar.classList.add('hidden');
+        }
+        layers = [];
+        for (const lData of project.layers) {
+            const lCanvas = document.createElement('canvas'); lCanvas.width = paperWidth; lCanvas.height = paperHeight;
+            const lCtx = lCanvas.getContext('2d');
+            const img = await new Promise(res => { const i = new Image(); i.onload = () => res(i); i.src = lData.data; });
+            lCtx.drawImage(img, 0, 0);
+            layers.push({
+                id: Date.now() + Math.random(),
+                name: lData.name,
+                canvas: lCanvas,
+                ctx: lCtx,
+                visible: lData.visible,
+                opacity: lData.opacity,
+                blendMode: lData.blend || 'source-over',
+                clippingMask: !!lData.clipping,
+                alphaLocked: !!lData.alphaLocked,
+                thumbData: ''
+            });
+        }
     }
+
     selectedLayerIndex = layers.length - 1;
 
     // Reset history for fresh project load
