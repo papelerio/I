@@ -67,7 +67,8 @@
 
     <!-- Menú Inicial de Configuración -->
     <div id="startup-modal" class="modal-overlay" style="display: none;">
-        <div class="modal-content">
+        <div class="modal-content" style="position: relative;">
+            <button id="startup-close-btn" class="startup-close-btn" title="Cancelar / Cerrar">✕</button>
             <h1>Bienvenido a Pro Illustrator</h1>
             <p>Configura tu espacio de trabajo</p>
             <div class="input-field" style="margin-bottom: 15px; text-align: left;">
@@ -435,6 +436,14 @@
                     <img src="iconos preferencias/pantalla completa.png" alt="Pantalla completa">
                     <span class="config-card-title" id="fullscreen-title">Pantalla completa</span>
                 </button>
+                <button class="config-card config-card-large" id="btn-toggle-project-type" title="Cambiar tipo de proyecto">
+                    <img src="iconos preferencias/cambiar a animacion o a ilustracion.png" alt="Cambiar tipo">
+                    <span class="config-card-title" id="toggle-project-type-label">A Animación</span>
+                </button>
+                <button class="config-card config-card-large" id="btn-save-duplicate" title="Guardar copia en galería">
+                    <img src="iconos preferencias/guardar proyecto duplicado.png" alt="Guardar copia">
+                    <span class="config-card-title">Guardar copia</span>
+                </button>
             </div>
             <div class="config-grid config-grid-small">
                 <button class="config-card config-card-small" id="toggle-copy-mode">
@@ -482,8 +491,7 @@
                     style="background: rgba(255,255,255,0.4); backdrop-filter: blur(5px); border: 1px solid rgba(255,255,255,0.5); color: #333; padding: 3px 10px; border-radius: 12px; font-size: 10px; font-weight: bold; cursor: pointer; transition: all 0.2s; white-space: nowrap;">&#8609;
                     Combinar</button>
             </div>
-            <div id="bottom-sliders-wrapper"
-                style="position: absolute; bottom: 20px; left: 20px; display: flex; gap: 15px; z-index: 101; align-items: flex-end;">
+            <div id="bottom-sliders-wrapper">
                 <div style="display: flex; flex-direction: column; gap: 10px;">
                     <div class="floating-slider-panel hidden" id="blur-settings-container">
                         <div class="floating-slider-header">
@@ -546,13 +554,15 @@
             <div class="animation-controls">
                 <button id="anim-play-btn" class="anim-btn play-btn" title="Reproducir / Pausar">▶</button>
                 <span id="anim-frame-counter" class="anim-frame-counter">1 / 1</span>
-                <div class="anim-fps-container">
-                    <label for="anim-fps-input">FPS:</label>
-                    <input type="number" id="anim-fps-input" min="1" max="60" value="12">
-                </div>
-                <div class="anim-fps-container" title="Visibilidad de papel cebolla (%)">
-                    <label for="anim-onion-input">V.cebolla:</label>
-                    <input type="number" id="anim-onion-input" min="0" max="100" value="20">%
+                <div class="anim-stacked-settings">
+                    <div class="anim-fps-container">
+                        <label for="anim-fps-input">FPS:</label>
+                        <input type="number" id="anim-fps-input" min="1" max="60" value="12">
+                    </div>
+                    <div class="anim-fps-container" title="Visibilidad de papel cebolla (%)">
+                        <label for="anim-onion-input">V.cebolla:</label>
+                        <input type="number" id="anim-onion-input" min="0" max="100" value="20">%
+                    </div>
                 </div>
                 <button id="anim-clear-onion-btn" class="anim-btn" style="padding: 3px 8px; font-size: 11px;" title="Restaurar / Quitar todas las guías cebolla">🧹 Limpiar guías</button>
             </div>

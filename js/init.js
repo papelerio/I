@@ -118,6 +118,22 @@ function init() {
 
     requestRender();
 
+    const startupCloseBtn = document.getElementById('startup-close-btn');
+    if (startupCloseBtn) {
+        startupCloseBtn.onclick = () => {
+            startupModal.style.display = 'none';
+            resetImportButton();
+            const galleryScreen = document.getElementById('gallery-screen');
+            // Si el lienzo principal está deshabilitado o desenfocado (sin proyecto cargado), regresar a la galería
+            if (mainApp && mainApp.classList.contains('blur-content')) {
+                if (galleryScreen) {
+                    galleryScreen.classList.remove('hidden');
+                    if (typeof renderGallery === 'function') renderGallery();
+                }
+            }
+        };
+    }
+
     createBtn.onclick = () => {
         startApp(parseInt(canvasWidthInput.value) | 0, parseInt(canvasHeightInput.value) | 0);
         resetImportButton();
@@ -537,7 +553,25 @@ function init() {
     addToPaletteBtn.onclick = () => { isAddingToPalette = true; addToPaletteBtn.classList.add('active-waiting'); };
 
     // Main Actions UI
-    document.getElementById('btn-config').onclick = () => toggleMenu(configMenu);
+    document.getElementById('btn-config').onclick = () => {
+        toggleMenu(configMenu);
+        if (typeof updateProjectTypeButtonLabel === 'function') updateProjectTypeButtonLabel();
+    };
+    const btnToggleType = document.getElementById('btn-toggle-project-type');
+    if (btnToggleType) {
+        btnToggleType.onclick = () => {
+            if (typeof toggleProjectType === 'function') toggleProjectType();
+        };
+    }
+    const btnSaveDuplicate = document.getElementById('btn-save-duplicate');
+    if (btnSaveDuplicate) {
+        btnSaveDuplicate.onclick = async () => {
+            toggleMenu(null);
+            if (typeof saveProjectDuplicateFromMenu === 'function') {
+                await saveProjectDuplicateFromMenu();
+            }
+        };
+    }
     document.getElementById('btn-main-actions').onclick = () => toggleMenu(mainActionsMenu);
     document.getElementById('action-download-png').onclick = () => { downloadImage(); toggleMenu(null); };
     document.getElementById('action-copy-all').onclick = () => { copyFlatImageToClipboard(); toggleMenu(null); };

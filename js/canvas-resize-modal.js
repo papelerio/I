@@ -123,15 +123,34 @@ function resizeCanvas(newW, newH, anchor = 'tl') {
         else if (row === 'b') oy = dh;
     }
 
-    // Resize each layer
-    layers.forEach(l => {
+    // Save active frame state first if in animation mode
+    if (typeof isAnimationMode !== 'undefined' && isAnimationMode && typeof saveCurrentFrameState === 'function') {
+        saveCurrentFrameState();
+    }
+
+    // Helper function to resize a single layer
+    const resizeSingleLayer = (l) => {
         const newCanvas = document.createElement('canvas');
         newCanvas.width = newW; newCanvas.height = newH;
-        const newCtx = newCanvas.getContext('2d');
+        const newCtx = newCanvas.getContext('2d', { willReadFrequently: true });
         newCtx.drawImage(l.canvas, ox, oy);
         l.canvas = newCanvas;
         l.ctx = newCtx;
-    });
+    };
+
+    // Resize active layers
+    layers.forEach(resizeSingleLayer);
+
+    // If in animation mode, resize ALL layers in ALL animation frames
+    if (typeof isAnimationMode !== 'undefined' && isAnimationMode && typeof animationFrames !== 'undefined' && Array.isArray(animationFrames)) {
+        animationFrames.forEach((frame, fIdx) => {
+            if (fIdx === currentFrameIndex) {
+                frame.layers = layers;
+            } else if (frame && Array.isArray(frame.layers)) {
+                frame.layers.forEach(resizeSingleLayer);
+            }
+        });
+    }
 
     // Update logical size
     paperWidth = newW;
@@ -149,7 +168,7 @@ function resizeCanvas(newW, newH, anchor = 'tl') {
     if (selectionCanvas) {
         const newSel = document.createElement('canvas');
         newSel.width = newW; newSel.height = newH;
-        const newSelCtx = newSel.getContext('2d');
+        const newSelCtx = newSel.getContext('2d', { willReadFrequently: true });
         if (hasSelection) newSelCtx.drawImage(selectionCanvas, ox, oy);
         selectionCanvas = newSel; selCtx = newSelCtx;
     }
@@ -163,7 +182,11 @@ function resizeCanvas(newW, newH, anchor = 'tl') {
 
     updateThumbnails();
     updateLayersUI();
+    if (typeof isAnimationMode !== 'undefined' && isAnimationMode && typeof updateFrameThumbnails === 'function') {
+        updateFrameThumbnails();
+    }
     pushHistory(); // snapshot AFTER resize
+    requestRender();
 }
 
 /**
@@ -178,6 +201,10 @@ function resizeCanvas(newW, newH, anchor = 'tl') {
 function rotateCanvas(direction) {
     endPushSession();
 
+    if (typeof isAnimationMode !== 'undefined' && isAnimationMode && typeof saveCurrentFrameState === 'function') {
+        saveCurrentFrameState();
+    }
+
     const oldW = paperWidth;
     const oldH = paperHeight;
     const newW = oldH;   // tras rotar 90° el ancho y el alto se intercambian
@@ -188,19 +215,34 @@ function rotateCanvas(direction) {
         const dst = document.createElement('canvas');
         dst.width  = newW;
         dst.height = newH;
-        const ctx = dst.getContext('2d');
+        const ctx = dst.getContext('2d', { willReadFrequently: true });
         ctx.translate(newW / 2, newH / 2);
         ctx.rotate(direction === 'cw' ? Math.PI / 2 : -Math.PI / 2);
         ctx.drawImage(srcCanvas, -oldW / 2, -oldH / 2);
         return dst;
     }
 
-    // Rotar todas las capas
+    // Rotar todas las capas activas
     layers.forEach(l => {
         const rotated = rotateLayerCanvas(l.canvas);
         l.canvas = rotated;
         l.ctx    = rotated.getContext('2d', { willReadFrequently: true });
     });
+
+    // Si está en modo animación, rotar todas las capas de TODOS los fotogramas
+    if (typeof isAnimationMode !== 'undefined' && isAnimationMode && typeof animationFrames !== 'undefined' && Array.isArray(animationFrames)) {
+        animationFrames.forEach((frame, fIdx) => {
+            if (fIdx === currentFrameIndex) {
+                frame.layers = layers;
+            } else if (frame && Array.isArray(frame.layers)) {
+                frame.layers.forEach(l => {
+                    const rotated = rotateLayerCanvas(l.canvas);
+                    l.canvas = rotated;
+                    l.ctx = rotated.getContext('2d', { willReadFrequently: true });
+                });
+            }
+        });
+    }
 
     // Actualizar dimensiones lógicas
     paperWidth  = newW;
@@ -245,6 +287,9 @@ function rotateCanvas(direction) {
 
     updateThumbnails();
     updateLayersUI();
+    if (typeof isAnimationMode !== 'undefined' && isAnimationMode && typeof updateFrameThumbnails === 'function') {
+        updateFrameThumbnails();
+    }
     pushHistory();
     requestRender();
 }

@@ -24,8 +24,10 @@ function addLayer(name, fromCanvas = false) {
     const newLayer = { id: Date.now(), name, canvas: lCanvas, ctx: lCtx, visible: true, opacity: 1.0, thumbData: '', alphaLocked: false, clippingMask: false, blendMode: 'source-over' };
     if (layers.length === 0) { layers.push(newLayer); selectedLayerIndex = 0; }
     else { layers.splice(selectedLayerIndex + 1, 0, newLayer); selectedLayerIndex++; }
+    layersCacheDirty = true;
     updateThumbnails(); updateLayersUI();
     pushHistory(); // snapshot AFTER adding the new layer
+    requestRender();
 }
 
 /**
@@ -77,8 +79,10 @@ function duplicateSelectedLayer() {
     };
     layers.splice(selectedLayerIndex + 1, 0, newLayer);
     selectedLayerIndex++;
+    layersCacheDirty = true;
     updateThumbnails(); updateLayersUI();
     pushHistory();
+    requestRender();
 }
 
 function updateBgUI() {
@@ -149,8 +153,10 @@ function mergeLayerDown(index) {
 
     layers.splice(index, 1);
     selectedLayerIndex = Math.max(0, index - 1);
+    layersCacheDirty = true;
     updateThumbnails(); updateLayersUI();
     pushHistory();
+    requestRender();
 }
 
 function updateThumbnails() {
@@ -161,7 +167,7 @@ function updateThumbnails() {
         thumbCanvas.height = 30;
         const tctx = thumbCanvas.getContext('2d');
         tctx.drawImage(l.canvas, 0, 0, 40, 30);
-        l.thumbData = thumbCanvas.toDataURL();
+        l.thumbData = thumbCanvas.toDataURL('image/webp', 0.85);
     });
 }
 

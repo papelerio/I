@@ -55,10 +55,25 @@ html {
 
 /* ── Save Flash Overlay ─────────────────────────────────────── */
 @keyframes save-flash {
-    0%   { opacity: 0; box-shadow: inset 0 0 0 4px #4ade80; }
-    18%  { opacity: 1; box-shadow: inset 0 0 0 4px #4ade80; }
-    60%  { opacity: 1; box-shadow: inset 0 0 0 4px #4ade80; }
-    100% { opacity: 0; box-shadow: inset 0 0 0 4px #4ade80; }
+    0% {
+        opacity: 0;
+        box-shadow: inset 0 0 0 4px #4ade80;
+    }
+
+    18% {
+        opacity: 1;
+        box-shadow: inset 0 0 0 4px #4ade80;
+    }
+
+    60% {
+        opacity: 1;
+        box-shadow: inset 0 0 0 4px #4ade80;
+    }
+
+    100% {
+        opacity: 0;
+        box-shadow: inset 0 0 0 4px #4ade80;
+    }
 }
 
 #save-flash-overlay {
@@ -91,7 +106,8 @@ html {
     flex-direction: column;
     align-items: center;
     padding: 20px 0;
-    z-index: 100;
+    position: relative;
+    z-index: 2500;
 }
 
 .sidebar-icons {
@@ -482,7 +498,7 @@ body:not(.theme-classic) .tool-btn img {
     display: flex;
     flex-direction: column;
     padding: 15px;
-    z-index: 1000;
+    z-index: 2000;
     color: var(--text-main);
 }
 
@@ -500,7 +516,7 @@ body:not(.theme-classic) .tool-btn img {
 }
 
 #config-menu {
-    width: 340px;
+    width: 440px;
     padding: 18px;
 }
 
@@ -1025,6 +1041,32 @@ body:not(.theme-classic) .tool-btn img {
     box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
     text-align: center;
     animation: modalPop 0.4s cubic-bezier(0.17, 0.89, 0.32, 1.28);
+    position: relative;
+}
+
+.startup-close-btn {
+    position: absolute;
+    top: 16px;
+    right: 16px;
+    background: rgba(0, 0, 0, 0.05);
+    border: none;
+    color: #666;
+    font-size: 16px;
+    font-weight: 700;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+}
+
+.startup-close-btn:hover {
+    background: rgba(239, 68, 68, 0.15);
+    color: #ef4444;
+    transform: scale(1.1);
 }
 
 @keyframes modalPop {
@@ -1949,7 +1991,7 @@ body:not(.theme-classic) .tool-btn img {
     align-items: center;
     justify-content: center;
     position: relative;
-    box-shadow: 0 2px 10px rgba(0,0,0,0.15);
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.15);
 }
 
 .gallery-title {
@@ -2022,10 +2064,11 @@ body:not(.theme-classic) .tool-btn img {
 
 .gallery-thumb-container {
     width: 100%;
-    aspect-ratio: 0.8; /* Portrait aspect ratio matching typical drawings */
+    aspect-ratio: 0.8;
+    /* Portrait aspect ratio matching typical drawings */
     background: #ffffff;
     border: 1px solid #ccc;
-    box-shadow: 0 4px 10px rgba(0,0,0,0.08);
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.08);
     border-radius: 4px;
     overflow: hidden;
     display: flex;
@@ -2044,6 +2087,26 @@ body:not(.theme-classic) .tool-btn img {
     height: 100%;
     object-fit: contain;
     background-color: #fafafa;
+}
+
+.gallery-anim-badge {
+    position: absolute;
+    bottom: 6px;
+    left: 6px;
+    background: rgba(0, 0, 0, 0.65);
+    backdrop-filter: blur(4px);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 4px;
+    padding: 2px 5px;
+    font-size: 12px;
+    line-height: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.3);
+    pointer-events: none;
+    z-index: 2;
+    user-select: none;
 }
 
 .gallery-item-label {
@@ -2069,10 +2132,11 @@ body:not(.theme-classic) .tool-btn img {
     /* Fixed bounding box: image fills as much as possible while keeping aspect ratio */
     width: 100%;
     max-width: 860px;
-    height: min(460px, 55vh);   /* 460px, but never taller than 55% of screen height */
+    height: min(460px, 55vh);
+    /* 460px, but never taller than 55% of screen height */
     background: #e8e8e8;
     border: 1px solid #ccc;
-    box-shadow: 0 6px 15px rgba(0,0,0,0.1);
+    box-shadow: 0 6px 15px rgba(0, 0, 0, 0.1);
     border-radius: 6px;
     overflow: hidden;
     display: flex;
@@ -2118,6 +2182,7 @@ body:not(.theme-classic) .tool-btn img {
     font-size: 13px;
     transition: transform 0.15s;
 }
+
 .detail-rename-btn:hover {
     transform: scale(1.2);
 }
@@ -2143,7 +2208,7 @@ body:not(.theme-classic) .tool-btn img {
     height: 55px;
     background-color: #2b2b2b;
     display: flex;
-    border-top: 1px solid rgba(255,255,255,0.08);
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
 }
 
 .gallery-footer button {
@@ -2163,7 +2228,7 @@ body:not(.theme-classic) .tool-btn img {
 }
 
 .gallery-footer button:hover:not(:disabled) {
-    background-color: rgba(255,255,255,0.05);
+    background-color: rgba(255, 255, 255, 0.05);
 }
 
 .gallery-footer button:disabled {
@@ -2195,6 +2260,7 @@ body:not(.theme-classic) .tool-btn img {
     font-family: var(--font-main);
     margin-left: auto;
 }
+
 .gallery-delete-btn:hover {
     background: #ff3333 !important;
 }
@@ -2206,18 +2272,27 @@ body:not(.theme-classic) .tool-btn img {
     background: rgba(28, 28, 35, 0.97);
     backdrop-filter: blur(16px);
     -webkit-backdrop-filter: blur(16px);
-    border: 1px solid rgba(255,255,255,0.10);
+    border: 1px solid rgba(255, 255, 255, 0.10);
     border-radius: 10px;
     padding: 6px 0;
     min-width: 170px;
-    box-shadow: 0 8px 32px rgba(0,0,0,0.45), 0 2px 8px rgba(0,0,0,0.3);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.45), 0 2px 8px rgba(0, 0, 0, 0.3);
     font-family: var(--font-main);
     animation: ctxFadeIn 0.12s ease;
 }
+
 @keyframes ctxFadeIn {
-    from { opacity: 0; transform: scale(0.95) translateY(-4px); }
-    to   { opacity: 1; transform: scale(1)   translateY(0);     }
+    from {
+        opacity: 0;
+        transform: scale(0.95) translateY(-4px);
+    }
+
+    to {
+        opacity: 1;
+        transform: scale(1) translateY(0);
+    }
 }
+
 .gallery-ctx-item {
     display: flex;
     align-items: center;
@@ -2230,22 +2305,27 @@ body:not(.theme-classic) .tool-btn img {
     transition: background 0.12s ease, color 0.12s ease;
     user-select: none;
 }
+
 .gallery-ctx-item:hover {
-    background: rgba(255,255,255,0.08);
+    background: rgba(255, 255, 255, 0.08);
     color: #fff;
 }
+
 .gallery-ctx-item.danger {
     color: #ff6b6b;
 }
+
 .gallery-ctx-item.danger:hover {
-    background: rgba(255,80,80,0.12);
+    background: rgba(255, 80, 80, 0.12);
     color: #ff4444;
 }
+
 .gallery-ctx-separator {
     height: 1px;
-    background: rgba(255,255,255,0.08);
+    background: rgba(255, 255, 255, 0.08);
     margin: 4px 0;
 }
+
 .gallery-ctx-icon {
     font-size: 15px;
     width: 18px;
@@ -2317,7 +2397,7 @@ body:not(.theme-classic) .tool-btn img {
     line-height: 1;
     min-width: 12px;
     text-align: center;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.4);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.4);
 }
 
 /* ── Shortcut Edit Modal ───────────────────────────────────── */
@@ -2347,8 +2427,15 @@ body:not(.theme-classic) .tool-btn img {
 }
 
 @keyframes modal-appear {
-    from { opacity: 0; transform: scale(0.95); }
-    to { opacity: 1; transform: scale(1); }
+    from {
+        opacity: 0;
+        transform: scale(0.95);
+    }
+
+    to {
+        opacity: 1;
+        transform: scale(1);
+    }
 }
 
 .shortcut-modal-header {
@@ -2440,12 +2527,32 @@ body:not(.theme-classic) .tool-btn img {
 }
 
 /* ═══════════════════════════════════════════════
+   PANEL DE DESLIZADORES INFERIORES (ESTABILIZADOR, SENSIBILIDAD, VELOCIDAD, DIFUMINADO)
+   ═══════════════════════════════════════════════ */
+#bottom-sliders-wrapper {
+    position: absolute;
+    bottom: 20px;
+    left: 20px;
+    display: flex;
+    gap: 15px;
+    z-index: 1600;
+    align-items: flex-end;
+    transition: bottom 0.25s ease, transform 0.25s ease;
+    pointer-events: auto;
+}
+
+body.animation-mode #bottom-sliders-wrapper,
+#bottom-sliders-wrapper.animation-mode {
+    bottom: 116px;
+}
+
+/* ═══════════════════════════════════════════════
    BARRA INFERIOR DE ANIMACIÓN (FLOTANTE & SEMITRANSPARENTE)
    ═══════════════════════════════════════════════ */
 .animation-bottom-bar {
     position: absolute;
     bottom: 20px;
-    left: 50%;
+    left: calc(50% + 40px);
     transform: translateX(-50%);
     z-index: 1500;
     display: flex;
@@ -2460,7 +2567,8 @@ body:not(.theme-classic) .tool-btn img {
     box-shadow: 0 8px 32px rgba(0, 0, 0, 0.35);
     opacity: 0.45;
     transition: opacity 0.25s ease, transform 0.25s ease, background 0.25s ease;
-    max-width: 90vw;
+    width: 95vw;
+    max-width: 1420px;
     user-select: none;
 }
 
@@ -2476,17 +2584,19 @@ body:not(.theme-classic) .tool-btn img {
     align-items: center;
     gap: 8px;
     overflow-x: auto;
-    max-width: 60vw;
+    flex: 1;
+    min-width: 0;
     padding: 4px 2px;
     scrollbar-width: thin;
-    scrollbar-color: rgba(255,255,255,0.2) transparent;
+    scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
 }
 
 .animation-frames-strip::-webkit-scrollbar {
     height: 4px;
 }
+
 .animation-frames-strip::-webkit-scrollbar-thumb {
-    background: rgba(255,255,255,0.2);
+    background: rgba(255, 255, 255, 0.2);
     border-radius: 4px;
 }
 
@@ -2502,7 +2612,7 @@ body:not(.theme-classic) .tool-btn img {
     overflow: hidden;
     flex-shrink: 0;
     transition: all 0.2s ease;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
 }
 
 .frame-thumb-item:hover {
@@ -2533,8 +2643,8 @@ body:not(.theme-classic) .tool-btn img {
     display: block;
     pointer-events: none;
     background-color: #ffffff;
-    background-image: 
-        linear-gradient(45deg, #e0e0e0 25%, transparent 25%), 
+    background-image:
+        linear-gradient(45deg, #e0e0e0 25%, transparent 25%),
         linear-gradient(-45deg, #e0e0e0 25%, transparent 25%),
         linear-gradient(45deg, transparent 75%, #e0e0e0 75%),
         linear-gradient(-45deg, transparent 75%, #e0e0e0 75%);
@@ -2562,7 +2672,7 @@ body:not(.theme-classic) .tool-btn img {
     left: 0;
     right: 0;
     bottom: 0;
-    background: rgba(0,0,0,0.65);
+    background: rgba(0, 0, 0, 0.65);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -2576,7 +2686,7 @@ body:not(.theme-classic) .tool-btn img {
 }
 
 .frame-thumb-action-btn {
-    background: rgba(255,255,255,0.2);
+    background: rgba(255, 255, 255, 0.2);
     border: none;
     color: white;
     width: 22px;
@@ -2671,23 +2781,36 @@ body:not(.theme-classic) .tool-btn img {
     text-align: center;
 }
 
+.anim-stacked-settings {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    justify-content: center;
+}
+
 .anim-fps-container {
     display: flex;
     align-items: center;
+    justify-content: flex-end;
     gap: 4px;
-    font-size: 11px;
+    font-size: 10px;
     color: #aaa;
     font-weight: 600;
+    white-space: nowrap;
+}
+
+.anim-fps-container label {
+    font-size: 10px;
 }
 
 .anim-fps-container input {
-    width: 42px;
+    width: 38px;
     background: rgba(0, 0, 0, 0.4);
     border: 1px solid rgba(255, 255, 255, 0.2);
     color: white;
-    border-radius: 6px;
-    padding: 3px 6px;
-    font-size: 12px;
+    border-radius: 4px;
+    padding: 1px 4px;
+    font-size: 11px;
     text-align: center;
     outline: none;
 }
@@ -2722,6 +2845,7 @@ body:not(.theme-classic) .tool-btn img {
         opacity: 0;
         transform: scale(0.92);
     }
+
     to {
         opacity: 1;
         transform: scale(1);

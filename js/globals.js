@@ -377,6 +377,7 @@ let projectType = 'illustration'; // 'illustration' | 'animation'
 // Animation UI Elements
 const projectTypeSelect = document.getElementById('project-type-select');
 const animationBottomBar = document.getElementById('animation-bottom-bar');
+const bottomSlidersWrapper = document.getElementById('bottom-sliders-wrapper');
 const animationFramesStrip = document.getElementById('animation-frames-strip');
 const addFrameBtn = document.getElementById('add-frame-btn');
 const animPlayBtn = document.getElementById('anim-play-btn');

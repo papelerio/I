@@ -76,6 +76,28 @@ function saveCurrentFrameState() {
 }
 
 /**
+ * Updates UI elements for Animation Mode vs Illustration Mode
+ */
+function updateAnimationUIState(enabled) {
+    const isAnim = !!enabled;
+    if (typeof animationBottomBar !== 'undefined' && animationBottomBar) {
+        if (isAnim) {
+            animationBottomBar.classList.remove('hidden');
+        } else {
+            animationBottomBar.classList.add('hidden');
+        }
+    }
+    if (typeof bottomSlidersWrapper !== 'undefined' && bottomSlidersWrapper) {
+        if (isAnim) {
+            bottomSlidersWrapper.classList.add('animation-mode');
+        } else {
+            bottomSlidersWrapper.classList.remove('animation-mode');
+        }
+    }
+    document.body.classList.toggle('animation-mode', isAnim);
+}
+
+/**
  * Initializes an animation project with 1 default frame
  */
 function initAnimationProject() {
@@ -96,9 +118,7 @@ function initAnimationProject() {
         layers: layers
     });
 
-    if (animationBottomBar) {
-        animationBottomBar.classList.remove('hidden');
-    }
+    updateAnimationUIState(true);
 
     setupAnimationEvents();
     updateFrameThumbnails();
@@ -201,8 +221,11 @@ function switchAnimationFrame(targetIndex) {
         selectedLayerIndex = Math.max(0, Math.min(selectedLayerIndex, layers.length - 1));
     }
 
-    if (typeof updateLayersListUI === 'function') {
-        updateLayersListUI();
+    if (typeof updateThumbnails === 'function') {
+        updateThumbnails();
+    }
+    if (typeof updateLayersUI === 'function') {
+        updateLayersUI();
     }
 
     layersCacheDirty = true;
@@ -299,8 +322,11 @@ function deleteAnimationFrame(index) {
     }
 
     layers = animationFrames[currentFrameIndex].layers;
-    if (typeof updateLayersListUI === 'function') {
-        updateLayersListUI();
+    if (typeof updateThumbnails === 'function') {
+        updateThumbnails();
+    }
+    if (typeof updateLayersUI === 'function') {
+        updateLayersUI();
     }
 
     layersCacheDirty = true;
@@ -362,8 +388,11 @@ function stopAnimationPlayback() {
         animPlayBtn.title = 'Reproducir';
     }
 
-    if (typeof updateLayersListUI === 'function') {
-        updateLayersListUI();
+    if (typeof updateThumbnails === 'function') {
+        updateThumbnails();
+    }
+    if (typeof updateLayersUI === 'function') {
+        updateLayersUI();
     }
     updateActiveFrameThumbnailUI();
 }
@@ -442,9 +471,11 @@ function updateActiveFrameThumbnailUI() {
 /**
  * Renders composite of frame layers into a preview thumbnail canvas
  */
-function renderFrameCompositeToCanvas(frame, destCanvas) {
+function renderFrameCompositeToCanvas(frame, destCanvas, clearFirst = true) {
     const dctx = destCanvas.getContext('2d');
-    dctx.clearRect(0, 0, destCanvas.width, destCanvas.height);
+    if (clearFirst) {
+        dctx.clearRect(0, 0, destCanvas.width, destCanvas.height);
+    }
 
     if (!frame || !frame.layers) return;
 
@@ -515,20 +546,95 @@ function renderOnionSkinOverlay(targetCtx) {
         onionSkinBufferCanvas.height = paperHeight;
     }
 
+    const obctx = onionSkinBufferCanvas.getContext('2d');
+    obctx.clearRect(0, 0, paperWidth, paperHeight);
+
+    let hasGuideContent = false;
+
     animationFrames.forEach((frame, idx) => {
-        // Optimization rule: Skip if this frame is currently being edited
+        // Regla de optimización: Omitir el fotograma que se está editando actualmente
         if (idx === currentFrameIndex) return;
 
         if (onionSkinFrames.has(frame.id)) {
-            const obctx = onionSkinBufferCanvas.getContext('2d');
-            obctx.clearRect(0, 0, paperWidth, paperHeight);
-            renderFrameCompositeToCanvas(frame, onionSkinBufferCanvas);
-
-            targetCtx.save();
-            targetCtx.globalAlpha = onionSkinOpacity;
-            targetCtx.globalCompositeOperation = 'source-over';
-            targetCtx.drawImage(onionSkinBufferCanvas, 0, 0);
-            targetCtx.restore();
+            renderFrameCompositeToCanvas(frame, onionSkinBufferCanvas, false);
+            hasGuideContent = true;
         }
     });
+
+    if (hasGuideContent) {
+        // Estampar la unión de todas las guías cebolla en 1 solo pase de transparencia
+        targetCtx.save();
+        targetCtx.globalAlpha = onionSkinOpacity;
+        targetCtx.globalCompositeOperation = 'source-over';
+        targetCtx.drawImage(onionSkinBufferCanvas, 0, 0);
+        targetCtx.restore();
+    }
+}
+
+/**
+ * Updates the label and tooltip of the project type toggle button in Preferences menu
+ */
+function updateProjectTypeButtonLabel() {
+    const label = document.getElementById('toggle-project-type-label');
+    const btn = document.getElementById('btn-toggle-project-type');
+    if (!label) return;
+    if (typeof isAnimationMode !== 'undefined' && isAnimationMode) {
+        label.textContent = 'A Ilustración';
+        if (btn) btn.title = 'Convertir proyecto a Ilustración (solo se conserva el fotograma actual)';
+    } else {
+        label.textContent = 'A Animación';
+        if (btn) btn.title = 'Convertir proyecto a Animación';
+    }
+}
+
+/**
+ * Toggles the current project between Illustration and Animation mode
+ */
+function toggleProjectType() {
+    if (typeof isAnimationMode !== 'undefined' && isAnimationMode) {
+        // Confirm migration from Animation to Illustration
+        const ok = confirm('¿Deseas convertir este proyecto a Ilustración?\n\nSolo se conservará el fotograma actual. Todos los demás fotogramas serán eliminados permanentemente.');
+        if (!ok) return;
+
+        if (typeof saveCurrentFrameState === 'function') {
+            saveCurrentFrameState();
+        }
+
+        // Keep active frame's layers as main layers
+        if (typeof animationFrames !== 'undefined' && animationFrames[currentFrameIndex]) {
+            layers = animationFrames[currentFrameIndex].layers;
+        }
+
+        isAnimationMode = false;
+        projectType = 'illustration';
+        animationFrames = [];
+
+        updateAnimationUIState(false);
+        if (typeof updateLayersUI === 'function') updateLayersUI();
+    } else {
+        // Migrate from Illustration to Animation
+        isAnimationMode = true;
+        projectType = 'animation';
+
+        if (!layers || layers.length === 0) {
+            if (typeof createFirstLayer === 'function') createFirstLayer();
+        }
+
+        animationFrames = [{
+            id: 'frame_' + Date.now(),
+            name: 'Fotograma 1',
+            layers: layers
+        }];
+        currentFrameIndex = 0;
+
+        updateAnimationUIState(true);
+        if (typeof setupAnimationEvents === 'function') setupAnimationEvents();
+        if (typeof updateFrameThumbnails === 'function') updateFrameThumbnails();
+        if (typeof updateLayersUI === 'function') updateLayersUI();
+    }
+
+    updateProjectTypeButtonLabel();
+    if (typeof saveCurrentProject === 'function') saveCurrentProject();
+    if (typeof pushHistory === 'function') pushHistory();
+    if (typeof requestRender === 'function') requestRender();
 }

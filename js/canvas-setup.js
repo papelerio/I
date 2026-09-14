@@ -34,7 +34,9 @@ function startApp(w, h, initialImg = null) {
     if (isAnimationMode) {
         initAnimationProject();
     } else {
-        if (typeof animationBottomBar !== 'undefined' && animationBottomBar) {
+        if (typeof updateAnimationUIState === 'function') {
+            updateAnimationUIState(false);
+        } else if (typeof animationBottomBar !== 'undefined' && animationBottomBar) {
             animationBottomBar.classList.add('hidden');
         }
     }

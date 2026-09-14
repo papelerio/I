@@ -11,7 +11,11 @@ const getDB = () => new Promise((res, rej) => {
 let gallerySelectedProjectId = null;
 let galleryMode = 'grid'; // 'grid' | 'detail'
 let draggedProjectId = null;
-let lastTargetId = null;
+let dragLastX = 0;
+let dragLastY = 0;
+let lastSwappedTarget = null;
+let lastSwapTime = 0;
+const SAME_TARGET_COOLDOWN = 100; // ms — short cooldown ONLY when hovering over the exact same target repeatedly
 
 function formatTime(seconds) {
     const h = Math.floor(seconds / 3600);
@@ -22,10 +26,11 @@ function formatTime(seconds) {
 
 /**
  * FLIP (First, Last, Invert, Play) animation helper to smoothly swap nodes in the grid
+ * Supports simultaneous animations for fast continuous dragging.
  */
 function flipReorder(parent, draggedEl, targetEl) {
     const children = Array.from(parent.children);
-    // 1. Get initial screen positions (First)
+    // 1. Get initial screen visual positions (First)
     const rects = children.map(child => ({
         el: child,
         rect: child.getBoundingClientRect()
@@ -43,26 +48,40 @@ function flipReorder(parent, draggedEl, targetEl) {
     // 3. Measure final positions and animate transitions (Last, Invert, Play)
     const newChildren = Array.from(parent.children);
     newChildren.forEach(child => {
+        if (child === draggedEl) return;
+
         const old = rects.find(r => r.el === child);
         if (!old) return;
+
+        // Temporarily clear transform/transition to read true untransformed target layout rect
+        const prevTransform = child.style.transform;
+        const prevTransition = child.style.transition;
+        child.style.transition = 'none';
+        child.style.transform = 'none';
+
         const newRect = child.getBoundingClientRect();
         const dx = old.rect.left - newRect.left;
         const dy = old.rect.top - newRect.top;
 
-        if (dx || dy) {
-            child.style.transition = 'none';
+        if (Math.abs(dx) > 0.5 || Math.abs(dy) > 0.5) {
+            // Apply invert offset immediately from current visual location
             child.style.transform = `translate(${dx}px, ${dy}px)`;
             child.offsetHeight; // Force reflow
-            child.style.transition = 'transform 0.25s cubic-bezier(0.25, 0.8, 0.25, 1)';
+
+            // Smooth fast animation to target (0,0)
+            child.style.transition = 'transform 0.18s cubic-bezier(0.2, 0, 0.2, 1)';
             child.style.transform = 'translate(0, 0)';
 
-            // Reset transition styles once finished
-            const onTransitionEnd = () => {
+            const onTransitionEnd = (e) => {
+                if (e && e.propertyName !== 'transform') return;
                 child.style.transition = '';
                 child.style.transform = '';
                 child.removeEventListener('transitionend', onTransitionEnd);
             };
             child.addEventListener('transitionend', onTransitionEnd);
+        } else {
+            child.style.transform = prevTransform;
+            child.style.transition = prevTransition;
         }
     });
 }
@@ -135,7 +154,7 @@ async function saveCurrentProject() {
 
     tctx.drawImage(flat, 0, 0, thumbW, thumbH);
 
-    const thumbDataURL = thumbCanvas.toDataURL('image/jpeg', 0.92);
+    const thumbDataURL = thumbCanvas.toDataURL('image/webp', 0.90);
 
     if (typeof saveCurrentFrameState === 'function') {
         saveCurrentFrameState();
@@ -165,7 +184,7 @@ async function saveCurrentProject() {
                 blend: l.blendMode,
                 clipping: l.clippingMask,
                 alphaLocked: l.alphaLocked,
-                data: l.canvas.toDataURL()
+                data: l.canvas.toDataURL('image/webp', 0.95)
             }))
         })) : null,
         layers: layers.map(l => ({
@@ -175,7 +194,7 @@ async function saveCurrentProject() {
             blend: l.blendMode,
             clipping: l.clippingMask,
             alphaLocked: l.alphaLocked,
-            data: l.canvas.toDataURL()
+            data: l.canvas.toDataURL('image/webp', 0.95)
         }))
     };
 
@@ -239,7 +258,9 @@ async function loadProject(id) {
         if (currentFrameIndex >= animationFrames.length) currentFrameIndex = 0;
         layers = animationFrames[currentFrameIndex].layers;
 
-        if (typeof animationBottomBar !== 'undefined' && animationBottomBar) {
+        if (typeof updateAnimationUIState === 'function') {
+            updateAnimationUIState(true);
+        } else if (typeof animationBottomBar !== 'undefined' && animationBottomBar) {
             animationBottomBar.classList.remove('hidden');
         }
         if (typeof animFpsInput !== 'undefined' && animFpsInput) {
@@ -253,7 +274,9 @@ async function loadProject(id) {
         }
     } else {
         isAnimationMode = false;
-        if (typeof animationBottomBar !== 'undefined' && animationBottomBar) {
+        if (typeof updateAnimationUIState === 'function') {
+            updateAnimationUIState(false);
+        } else if (typeof animationBottomBar !== 'undefined' && animationBottomBar) {
             animationBottomBar.classList.add('hidden');
         }
         layers = [];
@@ -388,10 +411,13 @@ async function renderGallery() {
                 item.classList.add('dragging');
                 e.dataTransfer.setData('text/plain', p.id);
                 e.dataTransfer.effectAllowed = 'move';
+                dragLastX = e.clientX;
+                dragLastY = e.clientY;
+                lastSwappedTarget = null;
+                lastSwapTime = 0;
             });
             item.addEventListener('dragend', async () => {
                 item.classList.remove('dragging');
-                lastTargetId = null;
 
                 // Save final DOM order directly to the database
                 const children = Array.from(gridEl.children);
@@ -416,8 +442,48 @@ async function renderGallery() {
                 e.dataTransfer.dropEffect = 'move';
 
                 const draggedEl = gridEl.querySelector('.dragging');
-                if (draggedEl && draggedEl !== item && p.id !== lastTargetId) {
-                    lastTargetId = p.id;
+                if (!draggedEl || draggedEl === item) return;
+
+                const now = Date.now();
+                // Short cooldown ONLY if continuously hovering the exact same target item that was just swapped
+                if (lastSwappedTarget === item && (now - lastSwapTime < SAME_TARGET_COOLDOWN)) {
+                    return;
+                }
+
+                const rect = item.getBoundingClientRect();
+                const midX = rect.left + rect.width / 2;
+                const midY = rect.top + rect.height / 2;
+
+                const children = Array.from(gridEl.children);
+                const targetIdx = children.indexOf(item);
+                const draggedIdx = children.indexOf(draggedEl);
+
+                let shouldSwap = false;
+                const isSameRow = (e.clientY >= rect.top && e.clientY <= rect.bottom);
+
+                if (draggedIdx < targetIdx) {
+                    if (e.clientY > rect.bottom) {
+                        shouldSwap = true;
+                    } else if (isSameRow) {
+                        shouldSwap = e.clientX > midX;
+                    } else if (e.clientY > midY) {
+                        shouldSwap = true;
+                    }
+                } else {
+                    if (e.clientY < rect.top) {
+                        shouldSwap = true;
+                    } else if (isSameRow) {
+                        shouldSwap = e.clientX < midX;
+                    } else if (e.clientY < midY) {
+                        shouldSwap = true;
+                    }
+                }
+
+                if (shouldSwap) {
+                    lastSwappedTarget = item;
+                    lastSwapTime = now;
+                    dragLastX = e.clientX;
+                    dragLastY = e.clientY;
                     flipReorder(gridEl, draggedEl, item);
                 }
             });
@@ -438,6 +504,15 @@ async function renderGallery() {
                 thumbContainer.appendChild(img);
             } else {
                 thumbContainer.innerHTML = '<span style="color:#aaa; font-size:10px;">Sin vista previa</span>';
+            }
+
+            const isAnim = !!(p.isAnimationMode || p.projectType === 'animation' || (p.animationFrames && p.animationFrames.length > 0));
+            if (isAnim) {
+                const badge = document.createElement('div');
+                badge.className = 'gallery-anim-badge';
+                badge.title = 'Proyecto de Animación';
+                badge.textContent = '🎞️';
+                thumbContainer.appendChild(badge);
             }
 
             const label = document.createElement('span');
@@ -500,6 +575,59 @@ async function duplicateProject(id) {
     await new Promise(res => tx2.oncomplete = res);
 
     renderGallery();
+}
+
+/**
+ * Clones the LAST SAVED state (Version A) from IndexedDB into a new gallery entry ("versión anterior"),
+ * and immediately saves the CURRENT active session (Version B) to disk.
+ */
+async function saveProjectDuplicateFromMenu() {
+    if (!currentProjectId) return;
+
+    const db = await getDB();
+    const tx = db.transaction('slots', 'readonly');
+    const lastSavedProject = await new Promise(res => tx.objectStore('slots').get(currentProjectId).onsuccess = e => res(e.target.result));
+
+    if (lastSavedProject) {
+        // Clone the previous saved state from DB
+        const backupId = 'proj_' + Date.now();
+        const backupProject = Object.assign({}, lastSavedProject, {
+            id: backupId,
+            title: (lastSavedProject.title || 'Sin título') + ' (versión anterior)',
+            order: (lastSavedProject.order !== undefined ? lastSavedProject.order : 0) + 0.1,
+            savedAt: Date.now()
+        });
+
+        const tx2 = db.transaction('slots', 'readwrite');
+        tx2.objectStore('slots').put(backupProject, backupId);
+        await new Promise(res => tx2.oncomplete = res);
+
+        // Save current active session state immediately
+        await saveCurrentProject();
+
+        alert(`¡Guardado completo!\n\n• Versión anterior respaldada en la galería como: "${backupProject.title}"\n• Proyecto actual guardado.`);
+    } else {
+        // If current project was never saved to DB before, save active state
+        await saveCurrentProject();
+
+        const txNew = db.transaction('slots', 'readonly');
+        const project = await new Promise(res => txNew.objectStore('slots').get(currentProjectId).onsuccess = e => res(e.target.result));
+        if (project) {
+            const backupId = 'proj_' + Date.now();
+            const backupProject = Object.assign({}, project, {
+                id: backupId,
+                title: (project.title || 'Sin título') + ' (copia inicial)',
+                order: (project.order !== undefined ? project.order : 0) + 0.1,
+                savedAt: Date.now()
+            });
+
+            const txWrite = db.transaction('slots', 'readwrite');
+            txWrite.objectStore('slots').put(backupProject, backupId);
+            await new Promise(res => txWrite.oncomplete = res);
+
+            alert(`Proyecto actual guardado y copia inicial respaldada en la galería como: "${backupProject.title}".`);
+        }
+    }
 }
 
 // ─── Gallery Context Menu ────────────────────────────────────
