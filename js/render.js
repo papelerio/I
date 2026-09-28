@@ -2,8 +2,11 @@ function render() {
     renderRequested = false;
     const isPreviewing = isDrawing && (currentBrush.useCompositing || isPostStrokePreview) && !currentBrush.isLasso && !activeFilterType;
     ctx.clearRect(0, 0, canvas.width, canvas.height); ctx.save();
-    ctx.imageSmoothingEnabled = imageSmoothing;
-    ctx.imageSmoothingQuality = imageSmoothing ? 'high' : 'low';
+    const isPixelBrush = currentBrush && currentBrush.isPixel;
+    ctx.imageSmoothingEnabled = isPixelBrush ? false : imageSmoothing;
+    // Use fast (low-quality) interpolation while the user is actively zooming or using pixel brush,
+    // then switch back to high-quality once the zoom settles (~150 ms after last wheel event).
+    ctx.imageSmoothingQuality = (imageSmoothing && !isZooming && !isPixelBrush) ? 'high' : 'low';
     ctx.translate(canvas.width / 2 + viewPosX, canvas.height / 2 + viewPosY);
     ctx.rotate(viewRotation); ctx.scale(viewScale, viewScale);
     ctx.translate(-paperWidth / 2, -paperHeight / 2);
@@ -469,12 +472,20 @@ function render() {
         if (isBrush) {
             const screenR = baseBrushSize * viewScale;
             ctx.beginPath();
-            ctx.arc(screenCursorX, screenCursorY, screenR, 0, Math.PI * 2);
+            if (currentBrush && currentBrush.isPixel) {
+                ctx.rect(screenCursorX - screenR, screenCursorY - screenR, screenR * 2, screenR * 2);
+            } else {
+                ctx.arc(screenCursorX, screenCursorY, screenR, 0, Math.PI * 2);
+            }
             ctx.strokeStyle = 'rgba(255,255,255,0.6)';
             ctx.lineWidth = 1.5;
             ctx.stroke();
             ctx.beginPath();
-            ctx.arc(screenCursorX, screenCursorY, screenR, 0, Math.PI * 2);
+            if (currentBrush && currentBrush.isPixel) {
+                ctx.rect(screenCursorX - screenR, screenCursorY - screenR, screenR * 2, screenR * 2);
+            } else {
+                ctx.arc(screenCursorX, screenCursorY, screenR, 0, Math.PI * 2);
+            }
             ctx.strokeStyle = 'rgba(0,0,0,0.2)';
             ctx.lineWidth = 0.5;
             ctx.stroke();

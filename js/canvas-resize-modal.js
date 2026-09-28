@@ -297,3 +297,267 @@ function rotateCanvas(direction) {
 // ── Listeners de los botones de rotación ──
 document.getElementById('rotate-canvas-left-btn').onclick  = () => rotateCanvas('ccw');
 document.getElementById('rotate-canvas-right-btn').onclick = () => rotateCanvas('cw');
+
+/**
+ * Evaluates all layers (or frames in animation mode) to find the exact bounding box
+ * of illustrated pixels exceeding the specified alpha threshold.
+ */
+function calculateAutoFitBounds(alphaThreshold = 10) {
+    let layersToScan = [];
+
+    if (typeof isAnimationMode !== 'undefined' && isAnimationMode && typeof animationFrames !== 'undefined' && Array.isArray(animationFrames) && animationFrames.length > 0) {
+        animationFrames.forEach(f => {
+            if (f && Array.isArray(f.layers)) {
+                layersToScan.push(...f.layers);
+            }
+        });
+    } else if (typeof layers !== 'undefined' && Array.isArray(layers)) {
+        layersToScan = layers;
+    }
+
+    if (layersToScan.length === 0) {
+        return { foundAny: false, contentW: 0, contentH: 0, minX: 0, minY: 0 };
+    }
+
+    const w = paperWidth;
+    const h = paperHeight;
+    let globalMinX = w;
+    let globalMinY = h;
+    let globalMaxX = -1;
+    let globalMaxY = -1;
+    let foundAny = false;
+
+    layersToScan.forEach(l => {
+        if (!l.ctx || !l.canvas) return;
+        let data;
+        try {
+            data = l.ctx.getImageData(0, 0, w, h).data;
+        } catch (e) {
+            return;
+        }
+
+        let lMinX = w, lMinY = h, lMaxX = -1, lMaxY = -1;
+        let lFound = false;
+
+        // Top-down scan for minY
+        for (let y = 0; y < h; y++) {
+            const offset = y * w * 4;
+            for (let x = 0; x < w; x++) {
+                if (data[offset + x * 4 + 3] >= alphaThreshold) {
+                    lMinY = y;
+                    lFound = true;
+                    break;
+                }
+            }
+            if (lFound) break;
+        }
+
+        if (!lFound) return; // Layer is completely transparent above threshold
+
+        // Bottom-up scan for maxY
+        for (let y = h - 1; y >= lMinY; y--) {
+            const offset = y * w * 4;
+            let rowHasPixel = false;
+            for (let x = 0; x < w; x++) {
+                if (data[offset + x * 4 + 3] >= alphaThreshold) {
+                    lMaxY = y;
+                    rowHasPixel = true;
+                    break;
+                }
+            }
+            if (rowHasPixel) break;
+        }
+
+        // Left-right scan for minX
+        for (let x = 0; x < w; x++) {
+            let colHasPixel = false;
+            for (let y = lMinY; y <= lMaxY; y++) {
+                if (data[(y * w + x) * 4 + 3] >= alphaThreshold) {
+                    lMinX = x;
+                    colHasPixel = true;
+                    break;
+                }
+            }
+            if (colHasPixel) break;
+        }
+
+        // Right-left scan for maxX
+        for (let x = w - 1; x >= lMinX; x--) {
+            let colHasPixel = false;
+            for (let y = lMinY; y <= lMaxY; y++) {
+                if (data[(y * w + x) * 4 + 3] >= alphaThreshold) {
+                    lMaxX = x;
+                    colHasPixel = true;
+                    break;
+                }
+            }
+            if (colHasPixel) break;
+        }
+
+        if (lMinX < globalMinX) globalMinX = lMinX;
+        if (lMinY < globalMinY) globalMinY = lMinY;
+        if (lMaxX > globalMaxX) globalMaxX = lMaxX;
+        if (lMaxY > globalMaxY) globalMaxY = lMaxY;
+        foundAny = true;
+    });
+
+    if (!foundAny) {
+        return { foundAny: false, contentW: 0, contentH: 0, minX: 0, minY: 0 };
+    }
+
+    const contentW = Math.max(1, globalMaxX - globalMinX + 1);
+    const contentH = Math.max(1, globalMaxY - globalMinY + 1);
+
+    return {
+        foundAny: true,
+        contentW,
+        contentH,
+        minX: globalMinX,
+        minY: globalMinY,
+        maxX: globalMaxX,
+        maxY: globalMaxY
+    };
+}
+
+/**
+ * Calculates auto-fit bounds for current alpha threshold, updates modal text,
+ * and sets up canvas resize preview guide box.
+ */
+function updateAutoFitBoundsAndGuide() {
+    const slider = document.getElementById('autofit-alpha-slider');
+    const threshold = parseInt(slider ? slider.value : 10) || 10;
+
+    const res = calculateAutoFitBounds(threshold);
+    const sizeEl = document.getElementById('autofit-result-size');
+    const posEl = document.getElementById('autofit-result-pos');
+
+    if (res.foundAny) {
+        if (sizeEl) sizeEl.textContent = `${res.contentW} x ${res.contentH} px`;
+        if (posEl) posEl.textContent = `(${res.minX}, ${res.minY})`;
+
+        // Update visual preview guide box on the main canvas
+        isResizingCanvas = true;
+        resizeLibre = true;
+        resizePreviewW = res.contentW;
+        resizePreviewH = res.contentH;
+        resizeOffsetX = -res.minX;
+        resizeOffsetY = -res.minY;
+
+        // Also sync input fields in main resize panel if open
+        const wInput = document.getElementById('resize-width');
+        const hInput = document.getElementById('resize-height');
+        if (wInput) wInput.value = res.contentW;
+        if (hInput) hInput.value = res.contentH;
+    } else {
+        if (sizeEl) sizeEl.textContent = 'Sin píxeles detectados';
+        if (posEl) posEl.textContent = '(-, -)';
+    }
+
+    if (typeof requestRender === 'function') requestRender();
+}
+
+/**
+ * Opens the dedicated Auto-Fit Bounding Box Modal with Alpha Threshold slider
+ */
+function openAutoFitModal() {
+    const modal = document.getElementById('autofit-modal');
+    if (!modal) return;
+
+    modal.classList.remove('hidden');
+    if (typeof makeDraggable === 'function') {
+        const header = document.getElementById('autofit-header');
+        if (header) makeDraggable(modal, header);
+    }
+
+    const slider = document.getElementById('autofit-alpha-slider');
+    const valLabel = document.getElementById('autofit-alpha-val');
+
+    if (slider) {
+        // Fast numeric text update while dragging (no heavy calculation)
+        slider.oninput = () => {
+            if (valLabel) valLabel.textContent = slider.value;
+        };
+
+        // Heavy pixel scan & preview guide box update ONLY when user releases slider (onchange)
+        slider.onchange = () => {
+            if (valLabel) valLabel.textContent = slider.value;
+            updateAutoFitBoundsAndGuide();
+        };
+    }
+
+    updateAutoFitBoundsAndGuide();
+}
+
+/**
+ * Applies the calculated auto-fit bounding box resize
+ */
+function applyAutoFit() {
+    const slider = document.getElementById('autofit-alpha-slider');
+    const threshold = parseInt(slider ? slider.value : 10) || 10;
+    const res = calculateAutoFitBounds(threshold);
+
+    if (!res.foundAny) {
+        alert('No se encontraron píxeles que superen el umbral Alpha seleccionado.');
+        return;
+    }
+
+    // Hide modals
+    const modal = document.getElementById('autofit-modal');
+    if (modal) modal.classList.add('hidden');
+    const resizePanel = document.getElementById('resize-panel');
+    if (resizePanel) resizePanel.classList.add('hidden');
+
+    isResizingCanvas = false;
+    resizeActiveHandle = null;
+    canvas.style.cursor = '';
+
+    // Set free offset crop position
+    resizeLibre = true;
+    resizeOffsetX = -res.minX;
+    resizeOffsetY = -res.minY;
+
+    // Apply canvas resize
+    resizeCanvas(res.contentW, res.contentH);
+
+    if (preResizeToolId) {
+        selectTool(preResizeToolId, preResizeToolName);
+        preResizeToolId = null;
+        preResizeToolName = null;
+    }
+}
+
+// ── Bindings para el modal de Ajuste Automático ──
+const autoFitBtn = document.getElementById('resize-auto-fit-btn');
+if (autoFitBtn) {
+    autoFitBtn.onclick = openAutoFitModal;
+}
+
+const autofitApplyBtn = document.getElementById('autofit-apply-btn');
+if (autofitApplyBtn) {
+    autofitApplyBtn.onclick = applyAutoFit;
+}
+
+const autofitCancelBtn = document.getElementById('autofit-cancel-btn');
+if (autofitCancelBtn) {
+    autofitCancelBtn.onclick = () => {
+        const modal = document.getElementById('autofit-modal');
+        if (modal) modal.classList.add('hidden');
+
+        // Hide canvas guide box if main resize-panel is also closed
+        const resizePanel = document.getElementById('resize-panel');
+        if (!resizePanel || resizePanel.classList.contains('hidden')) {
+            isResizingCanvas = false;
+        } else {
+            // Restore main resize panel preview
+            const wInput = document.getElementById('resize-width');
+            const hInput = document.getElementById('resize-height');
+            if (wInput && hInput) {
+                resizePreviewW = parseInt(wInput.value) || paperWidth;
+                resizePreviewH = parseInt(hInput.value) || paperHeight;
+                resizeOffsetX = 0;
+                resizeOffsetY = 0;
+            }
+        }
+        if (typeof requestRender === 'function') requestRender();
+    };
+}

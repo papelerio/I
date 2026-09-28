@@ -86,6 +86,80 @@ function flipReorder(parent, draggedEl, targetEl) {
     });
 }
 
+/**
+ * Enables smooth 60fps Pointer-based drag & drop reordering (Mouse + Touch)
+ * Avoids native HTML5 drag issues where DOM mutations abort native drag sessions.
+ */
+function makePointerReorderable(item, parent, getSiblingsSelector, onReorderEnd, onClickHandler) {
+    let isDragging = false;
+    let startX = 0, startY = 0;
+    let hasMoved = false;
+    let lastSwappedTarget = null;
+    let lastSwapTime = 0;
+    const SWAP_COOLDOWN = 100; // ms
+
+    item.style.touchAction = 'none';
+
+    item.addEventListener('pointerdown', (e) => {
+        if (e.button !== 0) return; // Only primary mouse button or touch
+        if (e.target.closest('input, select, button')) return;
+
+        startX = e.clientX;
+        startY = e.clientY;
+        hasMoved = false;
+        isDragging = false;
+        lastSwappedTarget = null;
+
+        const onPointerMove = (moveEv) => {
+            const dx = moveEv.clientX - startX;
+            const dy = moveEv.clientY - startY;
+
+            if (!hasMoved && (Math.abs(dx) > 4 || Math.abs(dy) > 4)) {
+                hasMoved = true;
+                isDragging = true;
+                item.classList.add('dragging');
+                item.style.pointerEvents = 'none';
+                if (typeof stopAnimationPlayback === 'function') stopAnimationPlayback();
+            }
+
+            if (!isDragging) return;
+
+            // Element currently under pointer (passes through dragged item because pointerEvents = 'none')
+            const hoveredEl = document.elementFromPoint(moveEv.clientX, moveEv.clientY);
+            if (!hoveredEl) return;
+
+            const targetItem = hoveredEl.closest(getSiblingsSelector);
+            if (!targetItem || targetItem === item || targetItem.parentElement !== parent) return;
+
+            const now = Date.now();
+            if (lastSwappedTarget === targetItem && (now - lastSwapTime < SWAP_COOLDOWN)) return;
+
+            lastSwappedTarget = targetItem;
+            lastSwapTime = now;
+            flipReorder(parent, item, targetItem);
+        };
+
+        const onPointerUp = (upEv) => {
+            window.removeEventListener('pointermove', onPointerMove);
+            window.removeEventListener('pointerup', onPointerUp);
+            window.removeEventListener('pointercancel', onPointerUp);
+
+            item.style.pointerEvents = '';
+
+            if (isDragging) {
+                item.classList.remove('dragging');
+                if (typeof onReorderEnd === 'function') onReorderEnd(item);
+            } else {
+                if (typeof onClickHandler === 'function') onClickHandler(upEv);
+            }
+        };
+
+        window.addEventListener('pointermove', onPointerMove);
+        window.addEventListener('pointerup', onPointerUp);
+        window.addEventListener('pointercancel', onPointerUp);
+    });
+}
+
 async function saveCurrentProject() {
     if (!currentProjectId) {
         currentProjectId = 'proj_' + Date.now();
@@ -177,6 +251,7 @@ async function saveCurrentProject() {
         animationFrames: isAnimationMode ? animationFrames.map(f => ({
             id: f.id,
             name: f.name,
+            selectedLayerIndex: f.selectedLayerIndex !== undefined ? f.selectedLayerIndex : 0,
             layers: f.layers.map(l => ({
                 name: l.name,
                 opacity: l.opacity,
@@ -252,11 +327,15 @@ async function loadProject(id) {
             animationFrames.push({
                 id: fData.id,
                 name: fData.name,
+                selectedLayerIndex: fData.selectedLayerIndex !== undefined ? fData.selectedLayerIndex : 0,
                 layers: fLayers
             });
         }
         if (currentFrameIndex >= animationFrames.length) currentFrameIndex = 0;
-        layers = animationFrames[currentFrameIndex].layers;
+        const activeFrame = animationFrames[currentFrameIndex];
+        layers = activeFrame.layers;
+        let savedIdx = (activeFrame.selectedLayerIndex !== undefined) ? activeFrame.selectedLayerIndex : (layers.length - 1);
+        selectedLayerIndex = Math.max(0, Math.min(savedIdx, layers.length - 1));
 
         if (typeof updateAnimationUIState === 'function') {
             updateAnimationUIState(true);
@@ -404,95 +483,36 @@ async function renderGallery() {
                 item.classList.add('selected');
             }
 
-            // HTML5 Drag and Drop bindings
-            item.setAttribute('draggable', 'true');
-            item.addEventListener('dragstart', (e) => {
-                draggedProjectId = p.id;
-                item.classList.add('dragging');
-                e.dataTransfer.setData('text/plain', p.id);
-                e.dataTransfer.effectAllowed = 'move';
-                dragLastX = e.clientX;
-                dragLastY = e.clientY;
-                lastSwappedTarget = null;
-                lastSwapTime = 0;
-            });
-            item.addEventListener('dragend', async () => {
-                item.classList.remove('dragging');
+            // Pointer-based Drag & Drop binding for 60fps reordering without native drag bugs
+            makePointerReorderable(
+                item,
+                gridEl,
+                '.gallery-item',
+                async () => {
+                    // Save final DOM order directly to IndexedDB
+                    const children = Array.from(gridEl.children);
+                    const orderIds = children.map(child => child.dataset.id);
 
-                // Save final DOM order directly to the database
-                const children = Array.from(gridEl.children);
-                const orderIds = children.map(child => child.dataset.id);
+                    const db2 = await getDB();
+                    const tx2 = db2.transaction('slots', 'readwrite');
+                    const store2 = tx2.objectStore('slots');
 
-                const db2 = await getDB();
-                const tx2 = db2.transaction('slots', 'readwrite');
-                const store2 = tx2.objectStore('slots');
-
-                orderIds.forEach((id, idx) => {
-                    const proj = projects.find(x => x.id === id);
-                    if (proj) {
-                        proj.order = idx;
-                        store2.put(proj, id);
-                    }
-                });
-                await new Promise(r => tx2.oncomplete = r);
-                document.querySelectorAll('.gallery-item').forEach(el => el.classList.remove('drag-over'));
-            });
-            item.addEventListener('dragover', (e) => {
-                e.preventDefault();
-                e.dataTransfer.dropEffect = 'move';
-
-                const draggedEl = gridEl.querySelector('.dragging');
-                if (!draggedEl || draggedEl === item) return;
-
-                const now = Date.now();
-                // Short cooldown ONLY if continuously hovering the exact same target item that was just swapped
-                if (lastSwappedTarget === item && (now - lastSwapTime < SAME_TARGET_COOLDOWN)) {
-                    return;
+                    orderIds.forEach((id, idx) => {
+                        const proj = projects.find(x => x.id === id);
+                        if (proj) {
+                            proj.order = idx;
+                            store2.put(proj, id);
+                        }
+                    });
+                    await new Promise(r => tx2.oncomplete = r);
+                },
+                () => {
+                    // Tap / Click action: select project & open detail mode
+                    gallerySelectedProjectId = p.id;
+                    galleryMode = 'detail';
+                    renderGallery();
                 }
-
-                const rect = item.getBoundingClientRect();
-                const midX = rect.left + rect.width / 2;
-                const midY = rect.top + rect.height / 2;
-
-                const children = Array.from(gridEl.children);
-                const targetIdx = children.indexOf(item);
-                const draggedIdx = children.indexOf(draggedEl);
-
-                let shouldSwap = false;
-                const isSameRow = (e.clientY >= rect.top && e.clientY <= rect.bottom);
-
-                if (draggedIdx < targetIdx) {
-                    if (e.clientY > rect.bottom) {
-                        shouldSwap = true;
-                    } else if (isSameRow) {
-                        shouldSwap = e.clientX > midX;
-                    } else if (e.clientY > midY) {
-                        shouldSwap = true;
-                    }
-                } else {
-                    if (e.clientY < rect.top) {
-                        shouldSwap = true;
-                    } else if (isSameRow) {
-                        shouldSwap = e.clientX < midX;
-                    } else if (e.clientY < midY) {
-                        shouldSwap = true;
-                    }
-                }
-
-                if (shouldSwap) {
-                    lastSwappedTarget = item;
-                    lastSwapTime = now;
-                    dragLastX = e.clientX;
-                    dragLastY = e.clientY;
-                    flipReorder(gridEl, draggedEl, item);
-                }
-            });
-            item.addEventListener('dragleave', () => {
-                item.classList.remove('drag-over');
-            });
-            item.addEventListener('drop', (e) => {
-                e.preventDefault();
-            });
+            );
 
             const thumbContainer = document.createElement('div');
             thumbContainer.className = 'gallery-thumb-container';
@@ -521,13 +541,6 @@ async function renderGallery() {
 
             item.appendChild(thumbContainer);
             item.appendChild(label);
-
-            item.onclick = () => {
-                if (item.classList.contains('dragging')) return;
-                gallerySelectedProjectId = p.id;
-                galleryMode = 'detail';
-                renderGallery();
-            };
 
             gridEl.appendChild(item);
         });

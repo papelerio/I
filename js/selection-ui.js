@@ -4,28 +4,6 @@
 function buildSelectionUI() {
     const container = document.getElementById('indicator-container');
 
-    // Lasso Sel mode toggle
-    lassoSelBtn = document.createElement('button');
-    lassoSelBtn.id = 'lasso-sel-mode-btn';
-    lassoSelBtn.className = 'indicator-extra-btn hidden';
-    lassoSelBtn.textContent = 'LAZO: CUADRADO';
-    lassoSelBtn.onclick = () => {
-        lassoSelMode = lassoSelMode === 'libre' ? 'cuadrado' : 'libre';
-        lassoSelBtn.textContent = `LAZO: ${lassoSelMode.toUpperCase()}`;
-    };
-    container.appendChild(lassoSelBtn);
-
-    // Lasso Des mode toggle
-    lassoDesBtn = document.createElement('button');
-    lassoDesBtn.id = 'lasso-des-mode-btn';
-    lassoDesBtn.className = 'indicator-extra-btn hidden';
-    lassoDesBtn.textContent = 'LAZO: CUADRADO';
-    lassoDesBtn.onclick = () => {
-        lassoSelMode = lassoSelMode === 'libre' ? 'cuadrado' : 'libre';
-        lassoDesBtn.textContent = `LAZO: ${lassoSelMode.toUpperCase()}`;
-    };
-    container.appendChild(lassoDesBtn);
-
     // Modify Sel: scope toggle
     modifySelBtn = document.createElement('button');
     modifySelBtn.id = 'modify-sel-scope-btn';
@@ -114,15 +92,7 @@ function buildSelectionUI() {
     };
     container.appendChild(eyedropperModeBtn);
 
-    // Fill-Lasso / Lasso-Eraser draw mode button
-    lassoFillModeBtn = document.createElement('button');
-    lassoFillModeBtn.id = 'lasso-fill-mode-btn';
-    lassoFillModeBtn.className = 'indicator-extra-btn hidden';
-    lassoFillModeBtn.onclick = () => {
-        lassoFillMode = lassoFillMode === 'libre' ? 'rectangulo' : 'libre';
-        updateLassoFillModeUI();
-    };
-    container.appendChild(lassoFillModeBtn);
+    // Fill-Lasso / Lasso-Eraser draw mode button (Migrated to top subtool bar)
 }
 
 function updateEyedropperModeUI() {
@@ -133,11 +103,7 @@ function updateEyedropperModeUI() {
 }
 
 function updateLassoFillModeUI() {
-    if (!lassoFillModeBtn) return;
-    const isRect = lassoFillMode === 'rectangulo';
-    lassoFillModeBtn.textContent = isRect ? '⬛ RECTÁNGULO' : '✏️ LIBRE';
-    lassoFillModeBtn.style.background = isRect ? '#0066ff' : '';
-    lassoFillModeBtn.style.color = isRect ? 'white' : '';
+    if (typeof updateTopSubtoolBar === 'function') updateTopSubtoolBar();
 }
 
 function updateShapeFromCenterUI() {
@@ -169,8 +135,7 @@ function showSelectionButtons(tool) {
     // Hide all extras first
     [lassoSelBtn, lassoDesBtn, modifySelBtn, clearSelBtn, shapeFillBtn, shapeFromCenterBtn, shapeModifiableBtn, fitScreenBtn, eyedropperModeBtn, lassoFillModeBtn].forEach(b => { if (b) b.classList.add('hidden'); });
 
-    if (tool === 'lazo-sel') { if (lassoSelBtn) lassoSelBtn.classList.remove('hidden'); if (hasSelection && clearSelBtn) clearSelBtn.classList.remove('hidden'); }
-    if (tool === 'lazo-des') { if (lassoDesBtn) lassoDesBtn.classList.remove('hidden'); if (hasSelection && clearSelBtn) clearSelBtn.classList.remove('hidden'); }
+    if ((tool === 'lazo-sel' || tool === 'lazo-des') && hasSelection && clearSelBtn) { clearSelBtn.classList.remove('hidden'); }
     if (tool === 'modify-sel') { if (modifySelBtn) modifySelBtn.classList.remove('hidden'); if (clearSelBtn) clearSelBtn.classList.remove('hidden'); }
     if (tool === 'bucket') { /* bucket panel handled by showBucketPanel() */ }
     
@@ -178,13 +143,6 @@ function showSelectionButtons(tool) {
         if (eyedropperModeBtn) {
             eyedropperModeBtn.classList.remove('hidden');
             updateEyedropperModeUI();
-        }
-    }
-
-    if (tool === 'pincel' && currentBrush.isLasso) {
-        if (lassoFillModeBtn) {
-            lassoFillModeBtn.classList.remove('hidden');
-            updateLassoFillModeUI();
         }
     }
 

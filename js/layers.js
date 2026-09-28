@@ -188,6 +188,7 @@ function updateLayersUI() {
         const li = document.createElement('li');
         li.className = 'layer-item' + (i === selectedLayerIndex ? ' active-layer' : '');
         li.dataset.index = i;
+        li._layerObj = l; // store layer object reference so onReorderEnd can read current DOM order
         const mainInfo = document.createElement('div');
         mainInfo.className = 'layer-main-info';
         const thumb = document.createElement('div');
@@ -338,64 +339,50 @@ function updateLayersUI() {
         blendSelect.onchange = () => { l.blendMode = blendSelect.value; layersCacheDirty = true; pushHistory(); requestRender(); };
         controls.appendChild(blendSelect);
         li.appendChild(controls);
-        li.onclick = () => {
-            if (selectedLayerIndex !== i) {
-                endPushSession();
-                selectedLayerIndex = i;
+        // ── Smooth 60fps Pointer-based Drag-and-drop reordering ──
+        makePointerReorderable(
+            li,
+            layersList,
+            '.layer-item',
+            () => {
+                // Read layer objects DIRECTLY from current DOM order using _layerObj reference.
+                // dataset.index is stale after FLIP moves nodes — never use it here.
+                // Panel renders top→bottom = highest index first, so DOM children[0] = top layer.
+                // We reverse so children[last] = layers[0].
+                const children = Array.from(layersList.children);
+                const selectedLayerObj = layers[selectedLayerIndex];
+
+                // Build reordered array: DOM top→bottom reversed → layers[0]→layers[N-1]
+                const reordered = children
+                    .map(child => child._layerObj)
+                    .filter(Boolean)
+                    .reverse();
+
+                if (reordered.length === layers.length) {
+                    layers = reordered;
+                    const newSelectedIdx = layers.indexOf(selectedLayerObj);
+                    if (newSelectedIdx >= 0) {
+                        selectedLayerIndex = newSelectedIdx;
+                    }
+                }
+
+                layersCacheDirty = true;
+                updateThumbnails();
                 updateLayersUI();
                 pushHistory();
                 requestRender();
+            },
+            () => {
+                // Click handler: select layer
+                if (selectedLayerIndex !== i) {
+                    endPushSession();
+                    selectedLayerIndex = i;
+                    updateLayersUI();
+                    pushHistory();
+                    requestRender();
+                }
             }
-        };
-
-        // ── Drag-and-drop reordering ──
-        li.draggable = true;
-        li.addEventListener('dragstart', (e) => {
-            isDraggingLayer = true;
-            e.dataTransfer.effectAllowed = 'move';
-            e.dataTransfer.setData('text/plain', i);
-            setTimeout(() => li.classList.add('dragging'), 0);
-        });
-        li.addEventListener('dragend', () => {
-            isDraggingLayer = false;
-            li.classList.remove('dragging');
-            document.querySelectorAll('.layer-item.drag-over').forEach(el => el.classList.remove('drag-over'));
-        });
-        li.addEventListener('dragover', (e) => {
-            e.preventDefault();
-            e.dataTransfer.dropEffect = 'move';
-            document.querySelectorAll('.layer-item.drag-over').forEach(el => el.classList.remove('drag-over'));
-            li.classList.add('drag-over');
-        });
-        li.addEventListener('dragleave', () => {
-            li.classList.remove('drag-over');
-        });
-        li.addEventListener('drop', (e) => {
-            e.preventDefault();
-            li.classList.remove('drag-over');
-            const fromIndex = parseInt(e.dataTransfer.getData('text/plain'));
-            const toIndex = parseInt(li.dataset.index);
-            if (fromIndex === toIndex) return;
-
-            // Move layer in the array
-            const [moved] = layers.splice(fromIndex, 1);
-            layers.splice(toIndex, 0, moved);
-
-            // Keep selectedLayerIndex pointing to the same layer
-            if (selectedLayerIndex === fromIndex) {
-                selectedLayerIndex = toIndex;
-            } else if (fromIndex < toIndex) {
-                if (selectedLayerIndex > fromIndex && selectedLayerIndex <= toIndex) selectedLayerIndex--;
-            } else {
-                if (selectedLayerIndex >= toIndex && selectedLayerIndex < fromIndex) selectedLayerIndex++;
-            }
-
-            layersCacheDirty = true;
-            updateThumbnails();
-            updateLayersUI();
-            pushHistory();
-            requestRender();
-        });
+        );
 
         layersList.appendChild(li);
     }

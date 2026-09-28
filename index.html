@@ -138,6 +138,11 @@
                 </div>
             </div>
 
+            <!-- Botón de Ajuste Automático al contenido -->
+            <button id="resize-auto-fit-btn" class="secondary-btn" style="padding: 8px 12px; font-weight: 600; font-size: 12px; display: flex; align-items: center; justify-content: center; gap: 6px; background: rgba(59, 130, 246, 0.1); color: #2563eb; border: 1px solid rgba(59, 130, 246, 0.3); border-radius: 8px; cursor: pointer; transition: all 0.2s;" title="Ajustar dimensiones exactamente al contenido ilustrado">
+                ✨ Ajuste automático
+            </button>
+
             <!-- Botones de rotación del lienzo -->
             <div style="display:flex; gap:8px; justify-content:center; align-items:center;">
                 <button id="rotate-canvas-left-btn" class="canvas-rotate-btn" title="Rotar lienzo 90° a la izquierda">
@@ -180,6 +185,9 @@
     </div>
 
     <div class="app-container blur-content" id="main-app">
+        <!-- Barra Superior de Iconos (Subherramientas Dinámicas) -->
+        <div id="top-subtool-bar" class="top-subtool-bar hidden" title="Opciones de herramienta"></div>
+
         <aside class="sidebar">
             <div class="sidebar-icons">
                 <button class="tool-btn" id="btn-config" title="Configuración (S)">
@@ -596,6 +604,41 @@
         <div class="setup-actions" style="gap: 10px;">
             <button id="filter-apply-btn" class="primary-btn" style="padding: 10px;">Aplicar</button>
             <button id="filter-cancel-btn" class="secondary-btn" style="padding: 10px;">Cancelar</button>
+        </div>
+    </div>
+
+    <!-- Auto-Fit Canvas Modal (Floating) -->
+    <div id="autofit-modal" class="floating-menu hidden"
+        style="width: 310px; top: 120px; left: calc(100vw - 340px); bottom: auto; z-index: 3100; background: rgba(255,255,255,0.95); backdrop-filter: blur(8px); padding: 18px; border-radius: 12px; box-shadow: 0 8px 25px rgba(0,0,0,0.25);">
+        <div class="menu-header" style="cursor: move;" id="autofit-header">
+            <label style="font-weight: 700; font-size: 14px; color: #1e293b;">✨ Ajuste Automático</label>
+        </div>
+        <p style="font-size: 11px; color: #64748b; margin: 8px 0 14px 0; line-height: 1.4;">Ajusta el umbral alpha para ignorar píxeles semitransparentes o pequeños residuos.</p>
+
+        <div style="display: flex; flex-direction: column; gap: 14px; margin-bottom: 18px;">
+            <div>
+                <div style="display: flex; justify-content: space-between; font-size: 12px; font-weight: 600; color: #334155; margin-bottom: 6px;">
+                    <span>Umbral Alpha</span>
+                    <span id="autofit-alpha-val" style="color: #2563eb; font-weight: 700;">10</span>
+                </div>
+                <input type="range" id="autofit-alpha-slider" min="1" max="255" value="10" style="width: 100%; accent-color: #2563eb;">
+            </div>
+
+            <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px 12px; display: flex; flex-direction: column; gap: 6px; font-size: 12px;">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <span style="color: #64748b;">Lienzo calculado:</span>
+                    <strong id="autofit-result-size" style="color: #0f172a; font-size: 13px;">0 x 0 px</strong>
+                </div>
+                <div style="display: flex; justify-content: space-between; align-items: center; font-size: 11px;">
+                    <span style="color: #94a3b8;">Origen (minX, minY):</span>
+                    <span id="autofit-result-pos" style="color: #475569; font-family: monospace;">(0, 0)</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="setup-actions" style="gap: 10px;">
+            <button id="autofit-apply-btn" class="primary-btn" style="flex: 1; padding: 9px; font-weight: 600;">Aplicar Ajuste</button>
+            <button id="autofit-cancel-btn" class="secondary-btn" style="flex: 1; padding: 9px;">Cancelar</button>
         </div>
     </div>
 

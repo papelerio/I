@@ -1,4 +1,4 @@
-﻿// (Elimina temblor de alta frecuencia sin dejar lados rectos)
+// (Elimina temblor de alta frecuencia sin dejar lados rectos)
 function smoothLassoPath(pts, passes) {
     if (pts.length <= 3) return pts;
     let p = pts;
@@ -257,7 +257,14 @@ function drawPoint(x, y, pressure) {
             else ctx.globalAlpha = 1.0;
             ctx.fillStyle = selectedColor;
             ctx.beginPath();
-            ctx.arc(x, y, size, 0, Math.PI * 2);
+            if (currentBrush.isPixel) {
+                const pSize = Math.max(1, Math.round(size * 2));
+                const px = Math.floor(x - pSize / 2);
+                const py = Math.floor(y - pSize / 2);
+                ctx.fillRect(px, py, pSize, pSize);
+            } else {
+                ctx.arc(x, y, size, 0, Math.PI * 2);
+            }
             ctx.fill();
             ctx.restore();
         }

@@ -22,6 +22,39 @@ function init() {
     window.addEventListener('resize', setupScreen);
     document.addEventListener('contextmenu', e => e.preventDefault());
 
+    // ─────────────────────────────────────────────────────────────
+    // Universal safeguard against native browser drag lock & freezes
+    // ─────────────────────────────────────────────────────────────
+    // Prevent default native browser dragstart UNLESS originating from or inside a valid draggable container
+    document.addEventListener('dragstart', (e) => {
+        const draggableContainer = e.target.closest ? e.target.closest('[draggable="true"]') : null;
+        if (!draggableContainer) {
+            // Not inside a draggable container -> cancel native browser image/link drag lock!
+            e.preventDefault();
+            return false;
+        }
+        // Inside a draggable container -> allow HTML5 drag to proceed!
+    }, true);
+
+    // Prevent text & image selection lock during rapid clicks on UI buttons
+    document.addEventListener('selectstart', (e) => {
+        const target = e.target;
+        if (target.tagName === 'BUTTON' || target.closest('button') || target.closest('.tool-btn') || target.closest('.mini-tool-btn')) {
+            e.preventDefault();
+            return false;
+        }
+    }, true);
+
+    // Safety cleanup: release stuck drag state on dragend or mouseup
+    window.addEventListener('dragend', () => {
+        document.querySelectorAll('.dragging, .drag-over').forEach(el => el.classList.remove('dragging', 'drag-over'));
+    }, true);
+    window.addEventListener('mouseup', () => {
+        if (document.querySelector('.dragging')) {
+            document.querySelectorAll('.dragging, .drag-over').forEach(el => el.classList.remove('dragging', 'drag-over'));
+        }
+    }, true);
+
     // Initialize smoothing preference
     const smoothingVal = document.getElementById('smoothing-value');
     if (smoothingVal) {
@@ -70,6 +103,7 @@ function init() {
     // Fast Zoom with Mouse Wheel (Centered at cursor)
     canvas.addEventListener('wheel', (e) => {
         e.preventDefault();
+        markZooming();
         const delta = -e.deltaY;
         const factor = Math.pow(1.1, delta / 100);
 
@@ -651,6 +685,7 @@ function init() {
     buildSelectionUI();
 
     initPalette(); loadShortcuts(); setupMultiToolMenu(); setupBrushMenu();
+    if (typeof updateTopSubtoolBar === 'function') updateTopSubtoolBar();
     applyCursor(false);
 }
 

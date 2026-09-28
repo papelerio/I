@@ -180,11 +180,12 @@ function getBrushIconPath(id) {
     const mapping = {
         'duro': 'iconos pinceles/pincel.png',
         'suave': 'iconos pinceles/pincel suave.png',
+        'pixel': 'iconos pinceles/pincel pixel.png',
         'borrador': 'iconos pinceles/borrador duro.png',
         'borrador-suave': 'iconos pinceles/borrador suave.png',
         'aero-duro': 'iconos pinceles/aerografo duro.png',
         'aero-suave': 'iconos pinceles/aerografo suave.png',
-        'lazo-relleno': 'iconos pinceles/lazo de relleno.png',
+        'lazo-relleno': 'iconos pinceles/Lazos de dibujo.png',
         'lazo-borrador': 'iconos pinceles/lazo borrador.png',
         'linea': 'iconos pinceles/linea.png',
         'rectangulo': 'iconos pinceles/rectangulo.png',
@@ -203,7 +204,7 @@ function getToolIconPath(id) {
         'pan': 'iconos multiherramientas/pan.png',
         'rotate': 'iconos multiherramientas/rotar lienzo.png',
         'bucket': 'iconos multiherramientas/cubeta.png',
-        'lazo-sel': 'iconos multiherramientas/lazo seleccionador.png',
+        'lazo-sel': 'iconos multiherramientas/Lasos de seleccion.png',
         'lazo-des': 'iconos multiherramientas/lazo deseleccionador.png',
         'modify-sel': 'iconos multiherramientas/modificar seleccion.png',
         'eyedropper': 'iconos multiherramientas/gotero.png'
@@ -371,7 +372,9 @@ function renderMenuList(cont, data, type) {
     cont.innerHTML = '';
     cont.classList.add('tools-grid');
     
-    data.forEach(item => {
+    const itemsToRender = data.filter(item => !item.hiddenInMenu);
+    
+    itemsToRender.forEach(item => {
         const card = document.createElement('div');
         
         let isActive = false;
@@ -379,23 +382,23 @@ function renderMenuList(cont, data, type) {
             if (item.isPush) {
                 isActive = (currentTool === 'push');
             } else {
-                isActive = (currentTool === 'pincel' && currentBrush && currentBrush.id === item.id);
+                isActive = (currentTool === 'pincel' && currentBrush && (currentBrush.id === item.id || (item.displayName === 'Lazos de Dibujo' && currentBrush.isLasso)));
             }
         } else {
-            isActive = (currentTool === item.id);
+            isActive = (currentTool === item.id || (item.displayName === 'Lazos de Selección' && (currentTool === 'lazo-sel' || currentTool === 'lazo-des')));
         }
         
         card.className = 'grid-item-card' + (isActive ? ' active' : '');
-        card.title = item.name;
+        card.title = item.displayName || item.name;
         
         // Icon Image
         const img = document.createElement('img');
         img.src = type === 'brush' ? getBrushIconPath(item.id) : getToolIconPath(item.id);
-        img.alt = item.name;
+        img.alt = item.displayName || item.name;
         card.appendChild(img);
         
         // Shortcut Badge
-        if (item.shortcut) {
+        if (item.shortcut && !item.noShortcutEdit) {
             const badge = document.createElement('div');
             badge.className = 'grid-item-shortcut-badge';
             
@@ -410,7 +413,7 @@ function renderMenuList(cont, data, type) {
         // Left click to select
         card.onclick = () => {
             if (type === 'brush') {
-                selectTool('pincel', item.name);
+                selectTool('pincel', item.displayName || item.name);
             } else {
                 selectTool(item.id, item.name);
             }
@@ -421,6 +424,7 @@ function renderMenuList(cont, data, type) {
         // Right click to edit shortcut
         card.oncontextmenu = (e) => {
             e.preventDefault();
+            if (item.noShortcutEdit) return;
             openShortcutEditModal(item, type);
         };
         
@@ -490,8 +494,30 @@ function loadShortcuts() {
         if (colorsShortcutInput) colorsShortcutInput.value = s.colorsMenu || '-';
         if (configShortcutInput) configShortcutInput.value = s.config || '{';
         newLayerShortcut = s.newLayer !== undefined ? s.newLayer : '*';
-        s.tools?.forEach(st => { const t = toolsData.find(x => x.id === st.id); if (t) { t.shortcut = st.shortcut || t.shortcut; t.modifier = st.modifier || 'normal'; } });
-        s.brushes?.forEach(sb => { const b = brushTypesData.find(x => x.id === sb.id); if (b) { b.shortcut = sb.shortcut || b.shortcut; b.modifier = sb.modifier || 'normal'; } });
+        s.tools?.forEach(st => {
+            const t = toolsData.find(x => x.id === st.id);
+            if (t) {
+                if (t.hiddenInMenu && t.id !== 'lazo-des') {
+                    t.shortcut = '';
+                    t.modifier = 'normal';
+                } else {
+                    t.shortcut = st.shortcut !== undefined ? st.shortcut : t.shortcut;
+                    t.modifier = st.modifier || 'normal';
+                }
+            }
+        });
+        s.brushes?.forEach(sb => {
+            const b = brushTypesData.find(x => x.id === sb.id);
+            if (b) {
+                if (b.hiddenInMenu && b.id !== 'lazo-borrador') {
+                    b.shortcut = '';
+                    b.modifier = 'normal';
+                } else {
+                    b.shortcut = sb.shortcut !== undefined ? sb.shortcut : b.shortcut;
+                    b.modifier = sb.modifier || 'normal';
+                }
+            }
+        });
     } catch (e) { }
 }
 

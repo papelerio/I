@@ -5,6 +5,9 @@
 let animationEventsInitialized = false;
 let contextMenuTargetIndex = -1;
 const frameContextMenu = document.getElementById('frame-context-menu');
+let lastSwappedFrameTarget = null;
+let lastFrameSwapTime = 0;
+const FRAME_SWAP_COOLDOWN = 100; // ms
 
 /**
  * Deep clones a layer structure including canvas contents
@@ -73,6 +76,9 @@ function hideFrameContextMenu() {
 function saveCurrentFrameState() {
     if (!isAnimationMode || !animationFrames[currentFrameIndex]) return;
     animationFrames[currentFrameIndex].layers = layers;
+    if (typeof selectedLayerIndex !== 'undefined') {
+        animationFrames[currentFrameIndex].selectedLayerIndex = selectedLayerIndex;
+    }
 }
 
 /**
@@ -115,7 +121,8 @@ function initAnimationProject() {
     animationFrames.push({
         id: 'frame_' + Date.now(),
         name: 'Fotograma 1',
-        layers: layers
+        layers: layers,
+        selectedLayerIndex: typeof selectedLayerIndex !== 'undefined' ? selectedLayerIndex : 0
     });
 
     updateAnimationUIState(true);
@@ -215,11 +222,11 @@ function switchAnimationFrame(targetIndex) {
 
     saveCurrentFrameState();
     currentFrameIndex = targetIndex;
-    layers = animationFrames[currentFrameIndex].layers;
+    const targetFrame = animationFrames[currentFrameIndex];
+    layers = targetFrame.layers;
 
-    if (typeof selectedLayerIndex !== 'undefined') {
-        selectedLayerIndex = Math.max(0, Math.min(selectedLayerIndex, layers.length - 1));
-    }
+    let savedIdx = (targetFrame.selectedLayerIndex !== undefined) ? targetFrame.selectedLayerIndex : (layers.length - 1);
+    selectedLayerIndex = Math.max(0, Math.min(savedIdx, layers.length - 1));
 
     if (typeof updateThumbnails === 'function') {
         updateThumbnails();
@@ -269,7 +276,8 @@ function addAnimationFrame(duplicateCurrent = false) {
     const newFrame = {
         id: 'frame_' + Date.now() + '_' + Math.floor(Math.random()*1000),
         name: `Fotograma ${animationFrames.length + 1}`,
-        layers: newLayers
+        layers: newLayers,
+        selectedLayerIndex: duplicateCurrent ? selectedLayerIndex : (newLayers.length - 1)
     };
 
     animationFrames.splice(currentFrameIndex + 1, 0, newFrame);
@@ -288,7 +296,8 @@ function duplicateAnimationFrame(index, position = 'next') {
     const newFrame = {
         id: 'frame_' + Date.now() + '_' + Math.floor(Math.random()*1000),
         name: `${sourceFrame.name} (copia)`,
-        layers: clonedLayers
+        layers: clonedLayers,
+        selectedLayerIndex: sourceFrame.selectedLayerIndex !== undefined ? sourceFrame.selectedLayerIndex : 0
     };
 
     let targetIdx = index + 1;
@@ -321,7 +330,11 @@ function deleteAnimationFrame(index) {
         currentFrameIndex = animationFrames.length - 1;
     }
 
-    layers = animationFrames[currentFrameIndex].layers;
+    const activeFrame = animationFrames[currentFrameIndex];
+    layers = activeFrame.layers;
+    let savedIdx = (activeFrame.selectedLayerIndex !== undefined) ? activeFrame.selectedLayerIndex : (layers.length - 1);
+    selectedLayerIndex = Math.max(0, Math.min(savedIdx, layers.length - 1));
+
     if (typeof updateThumbnails === 'function') {
         updateThumbnails();
     }
@@ -363,7 +376,12 @@ function startAnimationPlayback() {
     const intervalMs = Math.max(16, Math.round(1000 / animationFPS));
     animationInterval = setInterval(() => {
         currentFrameIndex = (currentFrameIndex + 1) % animationFrames.length;
-        layers = animationFrames[currentFrameIndex].layers;
+        const targetFrame = animationFrames[currentFrameIndex];
+        layers = targetFrame.layers;
+
+        let savedIdx = (targetFrame.selectedLayerIndex !== undefined) ? targetFrame.selectedLayerIndex : (layers.length - 1);
+        selectedLayerIndex = Math.max(0, Math.min(savedIdx, layers.length - 1));
+
         layersCacheDirty = true;
         requestRender();
 
@@ -388,6 +406,13 @@ function stopAnimationPlayback() {
         animPlayBtn.title = 'Reproducir';
     }
 
+    const activeFrame = animationFrames[currentFrameIndex];
+    if (activeFrame) {
+        layers = activeFrame.layers;
+        let savedIdx = (activeFrame.selectedLayerIndex !== undefined) ? activeFrame.selectedLayerIndex : (layers.length - 1);
+        selectedLayerIndex = Math.max(0, Math.min(savedIdx, layers.length - 1));
+    }
+
     if (typeof updateThumbnails === 'function') {
         updateThumbnails();
     }
@@ -409,7 +434,7 @@ function updateFrameThumbnails() {
         const isOnionActive = onionSkinFrames.has(frame.id);
         thumbDiv.className = `frame-thumb-item ${idx === currentFrameIndex ? 'active-frame' : ''} ${isOnionActive ? 'onion-skin-active' : ''}`;
         thumbDiv.dataset.index = idx;
-        thumbDiv.title = `Clic: Seleccionar | Doble clic: Alternar guía cebolla | Clic derecho: Opciones`;
+        thumbDiv.title = `Clic: Seleccionar | Ctrl + Clic: Alternar guía cebolla | Clic derecho: Opciones`;
 
         // Render preview canvas
         const previewCanvas = document.createElement('canvas');
@@ -426,14 +451,49 @@ function updateFrameThumbnails() {
         thumbDiv.appendChild(previewCanvas);
         thumbDiv.appendChild(numSpan);
 
-        thumbDiv.addEventListener('click', () => {
-            switchAnimationFrame(idx);
-        });
+        // Pointer-based Drag & Drop binding for 60fps frame reordering
+        makePointerReorderable(
+            thumbDiv,
+            animationFramesStrip,
+            '.frame-thumb-item',
+            () => {
+                // Save final DOM order of frames
+                const children = Array.from(animationFramesStrip.children);
+                const activeFrameObj = animationFrames[currentFrameIndex];
 
-        thumbDiv.addEventListener('dblclick', (e) => {
-            e.stopPropagation();
-            toggleFrameOnionSkin(idx);
-        });
+                const reordered = [];
+                children.forEach(child => {
+                    const oldIdx = parseInt(child.dataset.index, 10);
+                    if (!isNaN(oldIdx) && animationFrames[oldIdx]) {
+                        reordered.push(animationFrames[oldIdx]);
+                    }
+                });
+
+                if (reordered.length === animationFrames.length) {
+                    animationFrames = reordered;
+                    const newActiveIdx = animationFrames.indexOf(activeFrameObj);
+                    if (newActiveIdx >= 0) {
+                        currentFrameIndex = newActiveIdx;
+                    }
+                }
+
+                updateFrameThumbnails();
+                layersCacheDirty = true;
+                requestRender();
+
+                if (typeof pushHistory === 'function') pushHistory();
+                if (typeof saveCurrentProject === 'function') saveCurrentProject();
+            },
+            (upEv) => {
+                if (upEv.ctrlKey || upEv.metaKey) {
+                    upEv.stopPropagation();
+                    upEv.preventDefault();
+                    toggleFrameOnionSkin(idx);
+                } else {
+                    switchAnimationFrame(idx);
+                }
+            }
+        );
 
         thumbDiv.addEventListener('contextmenu', (e) => {
             showFrameContextMenu(e, idx);

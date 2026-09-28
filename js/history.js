@@ -79,6 +79,9 @@ function restoreHistoryState(snapshot) {
             // Save active layers of current frame before switching
             if (animationFrames[currentFrameIndex]) {
                 animationFrames[currentFrameIndex].layers = layers;
+                if (typeof selectedLayerIndex !== 'undefined') {
+                    animationFrames[currentFrameIndex].selectedLayerIndex = selectedLayerIndex;
+                }
             }
             if (snapshot.currentFrameIndex !== undefined && snapshot.currentFrameIndex >= 0) {
                 if (snapshot.currentFrameIndex < animationFrames.length) {
@@ -121,6 +124,7 @@ function restoreHistoryState(snapshot) {
         // Sync restored layers into animation frames structure if in animation mode
         if (snapshot.isAnimationMode && typeof animationFrames !== 'undefined' && animationFrames[currentFrameIndex]) {
             animationFrames[currentFrameIndex].layers = layers;
+            animationFrames[currentFrameIndex].selectedLayerIndex = selectedLayerIndex;
             if (typeof updateFrameThumbnails === 'function') {
                 updateFrameThumbnails();
             }
@@ -202,8 +206,8 @@ let toolsData = [
     { id: 'pan', name: 'Pan', shortcut: 'x' },
     { id: 'rotate', name: 'Girar Lienzo', shortcut: 'r' },
     { id: 'bucket', name: 'Cubeta', shortcut: 'b', opacity: 1.0 },
-    { id: 'lazo-sel', name: 'Lazo Seleccionador', shortcut: 'n' },
-    { id: 'lazo-des', name: 'Lazo Deseleccionador', shortcut: 'j' },
+    { id: 'lazo-sel', name: 'Lazo Seleccionador', displayName: 'Lazos de Selección', shortcut: 'n', noShortcutEdit: true },
+    { id: 'lazo-des', name: 'Lazo Deseleccionador', shortcut: 'j', hiddenInMenu: true },
     { id: 'modify-sel', name: 'Modificar Selección', shortcut: 'm' },
     { id: 'eyedropper', name: 'Gotero', shortcut: 't' },
 ];
@@ -211,12 +215,13 @@ const brushTypesData = [
     // size = baseBrushSize default, opacity = 0..1, blur = px
     { id: 'duro', name: 'Pincel Duro', shortcut: 'a', hardness: 0.8, useCompositing: true, useTexture: false, size: 2, opacity: 1.00, blur: 0 },
     { id: 'suave', name: 'Pincel Suave', shortcut: 'c', hardness: 0.3, useCompositing: false, useTexture: false, size: 2, opacity: 0.15, blur: 0 },
+    { id: 'pixel', name: 'Pincel Píxel', shortcut: 'e', hardness: 1.0, isPixel: true, useCompositing: true, useTexture: false, size: 4, opacity: 1.00, blur: 0 },
     { id: 'borrador', name: 'Borrador', shortcut: 's', hardness: 0.8, useCompositing: false, useTexture: false, isEraser: true, size: 3, opacity: 1.00, blur: 0 },
-    { id: 'borrador-suave', name: 'Borrador Suave', shortcut: 's', modifier: '+shift', hardness: 0.3, useCompositing: false, useTexture: false, isEraser: true, size: 7, opacity: 0.50, blur: 0 },
-    { id: 'aero-duro', name: 'Aerógrafo Duro', shortcut: 'e', hardness: 0.8, useCompositing: true, useTexture: false, size: 1, opacity: 1.00, blur: 12 },
-    { id: 'aero-suave', name: 'Aerógrafo Suave', shortcut: 'd', hardness: 0.2, useCompositing: true, useTexture: true, size: 3, opacity: 1.00, blur: 25 },
-    { id: 'lazo-relleno', name: 'Lazo de Relleno', shortcut: 'q', hardness: 1.0, isLasso: true, lassoColor: '#ff00ff', size: 10, opacity: 1.00, blur: 0 },
-    { id: 'lazo-borrador', name: 'Lazo Borrador', shortcut: 'w', hardness: 1.0, isLasso: true, lassoColor: '#ff0000', isEraser: true, size: 10, opacity: 1.00, blur: 0 },
+    { id: 'borrador-suave', name: 'Borrador Suave', shortcut: '', modifier: 'normal', hardness: 0.3, useCompositing: false, useTexture: false, isEraser: true, size: 7, opacity: 0.50, blur: 0, hiddenInMenu: true },
+    { id: 'aero-suave', name: 'Aerógrafo', shortcut: 'd', hardness: 0.2, useCompositing: true, useTexture: true, size: 3, opacity: 1.00, blur: 25 },
+    { id: 'aero-duro', name: 'Aerógrafo Duro', shortcut: '', modifier: 'normal', hardness: 0.8, useCompositing: true, useTexture: false, size: 1, opacity: 1.00, blur: 12, hiddenInMenu: true },
+    { id: 'lazo-relleno', name: 'Lazo de Relleno', displayName: 'Lazos de Dibujo', shortcut: 'q', hardness: 1.0, isLasso: true, lassoColor: '#ff00ff', size: 10, opacity: 1.00, blur: 0, noShortcutEdit: true },
+    { id: 'lazo-borrador', name: 'Lazo Borrador', shortcut: 'w', hardness: 1.0, isLasso: true, lassoColor: '#ff0000', isEraser: true, size: 10, opacity: 1.00, blur: 0, hiddenInMenu: true },
     // ── Shape tools ──
     { id: 'linea', name: 'Línea', shortcut: 'f', isShape: true, shapeType: 'line', useCompositing: true, useTexture: false, hardness: 1.0, size: 3, opacity: 1.00, blur: 0 },
     { id: 'rectangulo', name: 'Rectángulo', shortcut: 'g', isShape: true, shapeType: 'rect', useCompositing: true, useTexture: false, hardness: 1.0, size: 3, opacity: 1.00, blur: 0 },

@@ -97,6 +97,10 @@ function renderStamp(tctx, x, y, size, alpha) {
         tctx.drawImage(tintedAirbrushCanvas, x - size, y - size, size * 2, size * 2);
         tctx.restore();
     }
+    else if (currentBrush.isPixel) {
+        tctx.fillStyle = hexToRgba(selectedColor, alpha);
+        tctx.fillRect(x - size, y - size, size * 2, size * 2);
+    }
     else { const g = tctx.createRadialGradient(x, y, size * currentBrush.hardness, x, y, size); g.addColorStop(0, hexToRgba(selectedColor, alpha)); g.addColorStop(1, hexToRgba(selectedColor, 0)); tctx.fillStyle = g; tctx.beginPath(); tctx.arc(x, y, size, 0, Math.PI * 2); tctx.fill(); }
 }
 
@@ -151,6 +155,21 @@ function drawStabLineTo(sx, sy, sp, ex, ey, ep) {
         if (!currentBrush.useCompositing) ctx.globalAlpha = brushOpacity;
         else ctx.globalAlpha = 1.0;
         
+        if (currentBrush.isPixel) {
+            const pSize = Math.max(1, Math.round(size * 2));
+            const dist = Math.hypot(ex - sx, ey - sy);
+            const steps = Math.max(1, Math.ceil(dist / 0.5));
+            ctx.fillStyle = selectedColor;
+            for (let i = 0; i <= steps; i++) {
+                const t = i / steps;
+                const px = Math.floor(sx + (ex - sx) * t - pSize / 2);
+                const py = Math.floor(sy + (ey - sy) * t - pSize / 2);
+                ctx.fillRect(px, py, pSize, pSize);
+            }
+            ctx.restore();
+            return;
+        }
+
         ctx.strokeStyle = selectedColor;
         ctx.lineWidth = size * 2;
         ctx.lineCap = 'round';

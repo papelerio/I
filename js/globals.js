@@ -235,6 +235,18 @@ let currentProjectTime = 0;      // Accumulated active editing time in seconds
 let currentProjectOrder = 0;     // Drag order weight of current project
 let projectTimerInterval = null; // Timer interval for active time tracking
 let imageSmoothing = localStorage.getItem('imageSmoothing') !== 'false'; // image smoothing preference
+let isZooming = false;           // true while the user is actively zooming (wheel/pinch)
+let zoomSettleTimer = null;      // setTimeout handle – fires after zoom gesture ends
+
+function markZooming() {
+    isZooming = true;
+    if (zoomSettleTimer) clearTimeout(zoomSettleTimer);
+    zoomSettleTimer = setTimeout(() => {
+        isZooming = false;
+        zoomSettleTimer = null;
+        requestRender();
+    }, 150);
+}
 let newLayerShortcut = '*';
 let pressureSensitivity = 0.6;
 let velocitySensitivity = 0.0;   // 0 = off, 1 = full

@@ -1,4 +1,4 @@
-﻿// ─────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────
 //  SELECTION MASK HELPERS
 // ─────────────────────────────────────────────────────────────
 function ensureSelectionCanvas() {
@@ -164,17 +164,10 @@ function togglePerspectiveMode() {
     modSelPerspectiveMode = !modSelPerspectiveMode;
     if (modSelPerspectiveMode) {
         initPerspectiveCorners();
-        if (perspBtn) {
-            perspBtn.style.background = 'rgba(80,130,255,0.9)';
-            perspBtn.style.boxShadow = '0 0 12px rgba(80,130,255,0.6)';
-        }
     } else {
         perspCorners = null;
-        if (perspBtn) {
-            perspBtn.style.background = 'rgba(30,30,40,0.9)';
-            perspBtn.style.boxShadow = '';
-        }
     }
+    if (typeof updateTopSubtoolBar === 'function') updateTopSubtoolBar();
     requestRender();
 }
 
@@ -213,22 +206,7 @@ function worldToScreen(wx, wy) {
 }
 
 function updateFlipButtonsPosition() {
-    if (!modSelInitialized || !modSelBounds || !flipControls) {
-        if (flipControls) flipControls.classList.add('hidden');
-        return;
-    }
-    flipControls.classList.remove('hidden');
-    const b = modSelBounds;
-    // Position buttons near the rotation handle (top center)
-    const handleDist = 40;
-    const rotX = b.x + b.w / 2 + Math.sin(modSelRotation) * handleDist;
-    const rotY = b.y - Math.cos(modSelRotation) * handleDist;
-
-    // We want them to follow the top edge but offset a bit
-    const screenPos = worldToScreen(b.x + b.w / 2, b.y - 100);
-    flipControls.style.left = `${screenPos.x}px`;
-    flipControls.style.top = `${screenPos.y}px`;
-    flipControls.style.transform = `translate(-50%, -100%) rotate(${viewRotation}rad)`;
+    if (flipControls) flipControls.classList.add('hidden');
 }
 
 function captureLayerSelection(layer, bounds) {

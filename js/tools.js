@@ -62,7 +62,26 @@ function selectTool(id, name) {
     }
 
     if (id === 'pincel') {
-        const b = brushTypesData.find(x => x.name === name);
+        let b = brushTypesData.find(x => x.name === name || x.id === name || (x.displayName && x.displayName === name));
+
+        // Redirect to remembered subtool if this brush belongs to a subtool group
+        for (const groupKey in subtoolRegistry) {
+            const group = subtoolRegistry[groupKey];
+            if (group.isGroupMatch(id, name, b)) {
+                if (name === group.containerName || !b) {
+                    const rememberedId = lastSubtoolByGroup[groupKey];
+                    const rememberedBrush = brushTypesData.find(x => x.id === rememberedId);
+                    if (rememberedBrush) {
+                        b = rememberedBrush;
+                        name = rememberedBrush.name;
+                    }
+                } else if (b) {
+                    saveSubtoolMemory(groupKey, b.id);
+                }
+                break;
+            }
+        }
+
         document.querySelector('.tool-btn.active')?.classList.remove('active');
         document.getElementById('btn-brush')?.classList.add('active');
 
@@ -81,8 +100,29 @@ function selectTool(id, name) {
         const b = brushTypesData.find(x => x.isPush);
         if (b) currentBrush = b;
     } else {
-        currentTool = id;
-        if (activeToolIndicator) activeToolIndicator.textContent = name;
+        let targetToolId = id;
+        let targetToolName = name;
+
+        // Subtool group routing for multi-tools
+        for (const groupKey in subtoolRegistry) {
+            const group = subtoolRegistry[groupKey];
+            if (group.isGroupMatch(id, name, null)) {
+                if (name === group.containerName) {
+                    const rememberedId = lastSubtoolByGroup[groupKey];
+                    const rememberedItem = toolsData.find(x => x.id === rememberedId);
+                    if (rememberedItem) {
+                        targetToolId = rememberedItem.id;
+                        targetToolName = rememberedItem.name;
+                    }
+                } else {
+                    saveSubtoolMemory(groupKey, id);
+                }
+                break;
+            }
+        }
+
+        currentTool = targetToolId;
+        if (activeToolIndicator) activeToolIndicator.textContent = targetToolName;
     }
     showSelectionButtons(id);
     // Show / hide bucket settings panel
@@ -117,7 +157,319 @@ function selectTool(id, name) {
     if (typeof setupMultiToolMenu === 'function') setupMultiToolMenu();
     if (typeof setupBrushMenu === 'function') setupBrushMenu();
 
+    // Update dynamic top subtool icon bar
+    updateTopSubtoolBar();
+
     updateTintedTexture();
+}
+
+// ─────────────────────────────────────────────────────────────
+//  TOP BAR SUBTOOL SYSTEM (Automated & Dynamic with Memory)
+// ─────────────────────────────────────────────────────────────
+let lastSubtoolByGroup = {
+    'borrador': 'borrador',    // default
+    'aerografo': 'aero-suave', // default: aerógrafo suave
+    'lazos': 'lazo-relleno',   // default: lazo de relleno
+    'lazos-sel': 'lazo-sel'    // default: lazo seleccionador
+};
+
+try {
+    const savedSubtools = localStorage.getItem('last_subtools_memory');
+    if (savedSubtools) {
+        Object.assign(lastSubtoolByGroup, JSON.parse(savedSubtools));
+    }
+} catch (e) {}
+
+function saveSubtoolMemory(groupKey, subtoolId) {
+    lastSubtoolByGroup[groupKey] = subtoolId;
+    try {
+        localStorage.setItem('last_subtools_memory', JSON.stringify(lastSubtoolByGroup));
+    } catch (e) {}
+}
+
+const subtoolRegistry = {
+    'borrador': {
+        groupKey: 'borrador',
+        containerName: 'Borrador',
+        matches: (toolId, brush) => toolId === 'pincel' && brush && (brush.id === 'borrador' || brush.id === 'borrador-suave'),
+        isGroupMatch: (toolId, name, brush) => name === 'Borrador' || (brush && (brush.id === 'borrador' || brush.id === 'borrador-suave')),
+        items: [
+            {
+                id: 'borrador',
+                name: 'Borrador Duro',
+                icon: 'iconos pinceles/borrador duro.png',
+                action: () => {
+                    const b = brushTypesData.find(x => x.id === 'borrador');
+                    if (b) {
+                        currentBrush = b;
+                        saveSubtoolMemory('borrador', 'borrador');
+                        syncBrushUI();
+                    }
+                },
+                isActive: (brush) => brush && brush.id === 'borrador'
+            },
+            {
+                id: 'borrador-suave',
+                name: 'Borrador Suave',
+                icon: 'iconos pinceles/borrador suave.png',
+                action: () => {
+                    const b = brushTypesData.find(x => x.id === 'borrador-suave');
+                    if (b) {
+                        currentBrush = b;
+                        saveSubtoolMemory('borrador', 'borrador-suave');
+                        syncBrushUI();
+                    }
+                },
+                isActive: (brush) => brush && brush.id === 'borrador-suave'
+            }
+        ]
+    },
+    'aerografo': {
+        groupKey: 'aerografo',
+        containerName: 'Aerógrafo',
+        matches: (toolId, brush) => toolId === 'pincel' && brush && (brush.id === 'aero-suave' || brush.id === 'aero-duro'),
+        isGroupMatch: (toolId, name, brush) => name === 'Aerógrafo' || name === 'Aerografo' || (brush && (brush.id === 'aero-suave' || brush.id === 'aero-duro')),
+        items: [
+            {
+                id: 'aero-suave',
+                name: 'Aerógrafo Suave',
+                icon: 'iconos pinceles/aerografo suave.png',
+                action: () => {
+                    const b = brushTypesData.find(x => x.id === 'aero-suave');
+                    if (b) {
+                        currentBrush = b;
+                        saveSubtoolMemory('aerografo', 'aero-suave');
+                        syncBrushUI();
+                    }
+                },
+                isActive: (brush) => brush && brush.id === 'aero-suave'
+            },
+            {
+                id: 'aero-duro',
+                name: 'Aerógrafo Duro',
+                icon: 'iconos pinceles/aerografo duro.png',
+                action: () => {
+                    const b = brushTypesData.find(x => x.id === 'aero-duro');
+                    if (b) {
+                        currentBrush = b;
+                        saveSubtoolMemory('aerografo', 'aero-duro');
+                        syncBrushUI();
+                    }
+                },
+                isActive: (brush) => brush && brush.id === 'aero-duro'
+            }
+        ]
+    },
+    'lazos': {
+        groupKey: 'lazos',
+        containerName: 'Lazos de Dibujo',
+        matches: (toolId, brush) => toolId === 'pincel' && brush && (brush.id === 'lazo-relleno' || brush.id === 'lazo-borrador'),
+        isGroupMatch: (toolId, name, brush) => name === 'Lazos de Dibujo' || name === 'Lazo de Relleno' || name === 'Lazo Borrador' || (brush && (brush.id === 'lazo-relleno' || brush.id === 'lazo-borrador')),
+        items: [
+            {
+                id: 'lazo-relleno',
+                name: 'Lazo de Relleno',
+                icon: 'iconos pinceles/lazo de relleno.png',
+                brushId: 'lazo-relleno',
+                hasShortcut: true,
+                action: () => {
+                    const b = brushTypesData.find(x => x.id === 'lazo-relleno');
+                    if (b) {
+                        currentBrush = b;
+                        saveSubtoolMemory('lazos', 'lazo-relleno');
+                        syncBrushUI();
+                    }
+                },
+                isActive: (brush) => brush && brush.id === 'lazo-relleno'
+            },
+            {
+                id: 'lazo-borrador',
+                name: 'Lazo Borrador',
+                icon: 'iconos pinceles/lazo borrador.png',
+                brushId: 'lazo-borrador',
+                hasShortcut: true,
+                action: () => {
+                    const b = brushTypesData.find(x => x.id === 'lazo-borrador');
+                    if (b) {
+                        currentBrush = b;
+                        saveSubtoolMemory('lazos', 'lazo-borrador');
+                        syncBrushUI();
+                    }
+                },
+                isActive: (brush) => brush && brush.id === 'lazo-borrador'
+            },
+            {
+                id: 'lazo-mode-toggle',
+                name: () => `Modo Lazo: ${lassoFillMode === 'rectangulo' ? 'Rectangular' : 'Libre'}`,
+                icon: () => lassoFillMode === 'rectangulo' ? 'iconos pinceles/rectangular.png' : 'iconos pinceles/libre.png',
+                hasShortcut: false,
+                isToggle: true,
+                action: () => {
+                    lassoFillMode = lassoFillMode === 'libre' ? 'rectangulo' : 'libre';
+                    if (typeof updateLassoFillModeUI === 'function') updateLassoFillModeUI();
+                },
+                isActive: () => lassoFillMode === 'rectangulo'
+            }
+        ]
+    },
+    'lazos-sel': {
+        groupKey: 'lazos-sel',
+        containerName: 'Lazos de Selección',
+        matches: (toolId, brush) => toolId === 'lazo-sel' || toolId === 'lazo-des',
+        isGroupMatch: (toolId, name, brush) => toolId === 'lazo-sel' || toolId === 'lazo-des' || name === 'Lazos de Selección' || name === 'Lazos de Seleccion' || name === 'Lazo Seleccionador' || name === 'Lazo Deseleccionador',
+        items: [
+            {
+                id: 'lazo-sel',
+                name: 'Lazo Seleccionador',
+                icon: 'iconos multiherramientas/lazo seleccionador.png',
+                toolId: 'lazo-sel',
+                hasShortcut: true,
+                action: () => {
+                    selectTool('lazo-sel', 'Lazo Seleccionador');
+                    saveSubtoolMemory('lazos-sel', 'lazo-sel');
+                },
+                isActive: () => currentTool === 'lazo-sel'
+            },
+            {
+                id: 'lazo-des',
+                name: 'Lazo Deseleccionador',
+                icon: 'iconos multiherramientas/lazo deseleccionador.png',
+                toolId: 'lazo-des',
+                hasShortcut: true,
+                action: () => {
+                    selectTool('lazo-des', 'Lazo Deseleccionador');
+                    saveSubtoolMemory('lazos-sel', 'lazo-des');
+                },
+                isActive: () => currentTool === 'lazo-des'
+            },
+            {
+                id: 'lazo-sel-mode-toggle',
+                name: () => `Modo Selección: ${lassoSelMode === 'cuadrado' || lassoSelMode === 'rectangulo' ? 'Rectangular' : 'Libre'}`,
+                icon: () => (lassoSelMode === 'cuadrado' || lassoSelMode === 'rectangulo') ? 'iconos pinceles/rectangular.png' : 'iconos pinceles/libre.png',
+                hasShortcut: false,
+                isToggle: true,
+                action: () => {
+                    lassoSelMode = (lassoSelMode === 'libre') ? 'cuadrado' : 'libre';
+                    updateTopSubtoolBar();
+                },
+                isActive: () => lassoSelMode === 'cuadrado' || lassoSelMode === 'rectangulo'
+            }
+        ]
+    },
+    'modify-sel': {
+        groupKey: 'modify-sel',
+        containerName: 'Modificar Selección',
+        matches: (toolId, brush) => toolId === 'modify-sel',
+        isGroupMatch: (toolId, name, brush) => toolId === 'modify-sel' || name === 'Modificar Selección' || name === 'Modificar Seleccion',
+        items: [
+            {
+                id: 'flip-h',
+                name: 'Voltear Horizontalmente',
+                icon: 'voltear horizontalmente.png',
+                isInstant: true,
+                action: () => {
+                    if (typeof flipSelection === 'function') flipSelection('h');
+                }
+            },
+            {
+                id: 'flip-v',
+                name: 'Voltear Verticalmente',
+                icon: 'voltear verticalmente.png',
+                isInstant: true,
+                action: () => {
+                    if (typeof flipSelection === 'function') flipSelection('v');
+                }
+            },
+            {
+                id: 'perspective',
+                name: 'Perspectiva',
+                icon: 'perspectiva.png',
+                isToggle: true,
+                action: () => {
+                    if (typeof togglePerspectiveMode === 'function') togglePerspectiveMode();
+                },
+                isActive: () => typeof modSelPerspectiveMode !== 'undefined' && modSelPerspectiveMode
+            }
+        ]
+    }
+};
+
+function updateTopSubtoolBar() {
+    const topBar = document.getElementById('top-subtool-bar');
+    if (!topBar) return;
+
+    let activeGroup = null;
+    for (const key in subtoolRegistry) {
+        if (subtoolRegistry[key].matches(currentTool, currentBrush)) {
+            activeGroup = subtoolRegistry[key];
+            break;
+        }
+    }
+
+    if (!activeGroup) {
+        topBar.classList.add('hidden');
+        topBar.innerHTML = '';
+        return;
+    }
+
+    topBar.innerHTML = '';
+    activeGroup.items.forEach(item => {
+        const btn = document.createElement('button');
+        const active = typeof item.isActive === 'function' ? item.isActive(currentBrush) : false;
+        const itemIcon = typeof item.icon === 'function' ? item.icon() : item.icon;
+        const itemName = typeof item.name === 'function' ? item.name() : item.name;
+
+        let btnClass = 'top-subtool-btn';
+        if (item.isToggle) btnClass += ' toggle-btn';
+        if (item.isInstant) btnClass += ' instant-btn';
+        if (active) btnClass += ' active';
+
+        btn.className = btnClass;
+        btn.title = itemName;
+
+        const img = document.createElement('img');
+        img.src = itemIcon;
+        img.alt = itemName;
+        btn.appendChild(img);
+
+        const toolObj = item.toolId ? toolsData.find(x => x.id === item.toolId) : null;
+        const brushObj = item.brushId ? brushTypesData.find(x => x.id === item.brushId) : null;
+        const targetObj = toolObj || brushObj;
+        const targetType = toolObj ? 'tool' : 'brush';
+        const shortcutKey = item.hasShortcut && targetObj ? (targetObj.shortcut || '') : '';
+
+        if (shortcutKey) {
+            const badge = document.createElement('div');
+            badge.className = 'top-subtool-badge';
+            let modPrefix = '';
+            if (targetObj?.modifier === '+shift') modPrefix = '⇧';
+            else if (targetObj?.modifier === '+shift+ctrl') modPrefix = '⌃⇧';
+            badge.textContent = modPrefix + shortcutKey.toUpperCase();
+            btn.appendChild(badge);
+        }
+
+        btn.onclick = (e) => {
+            e.stopPropagation();
+            item.action();
+            updateTopSubtoolBar();
+            if (typeof setupMultiToolMenu === 'function') setupMultiToolMenu();
+            if (typeof setupBrushMenu === 'function') setupBrushMenu();
+        };
+
+        if (item.hasShortcut && targetObj) {
+            btn.oncontextmenu = (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                if (typeof openShortcutEditModal === 'function') {
+                    openShortcutEditModal(targetObj, targetType);
+                }
+            };
+        }
+
+        topBar.appendChild(btn);
+    });
+
+    topBar.classList.remove('hidden');
 }
 
 function rgbToHex(r, g, b) {

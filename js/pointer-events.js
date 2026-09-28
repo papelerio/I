@@ -302,6 +302,7 @@ function handlePointerMove(e) {
         executePush(world.x, world.y, e.movementX / viewScale, e.movementY / viewScale);
     }
     else if (currentTool === 'zoom') {
+        markZooming();
         const oldScale = viewScale;
         viewScale *= 1 + e.movementY * -0.005;
         viewScale = Math.max(0.01, Math.min(20, viewScale));
