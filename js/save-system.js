@@ -276,6 +276,7 @@ async function saveCurrentProject() {
     const tx = db.transaction('slots', 'readwrite');
     tx.objectStore('slots').put(project, currentProjectId);
     return new Promise(res => tx.oncomplete = () => {
+        hasUnsavedChanges = false;
         res();
     });
 }
@@ -394,6 +395,7 @@ async function loadProject(id) {
 
     startProjectTimer();
     toggleMenu(null);
+    hasUnsavedChanges = false;
 }
 
 async function deleteProject(id) {
@@ -732,16 +734,79 @@ async function saveProjectDuplicateFromMenu() {
             fctx.fillRect(0, 0, w, h);
         }
 
-        // Composicionar capas en orden (índice 0 = fondo)
-        for (const entry of layerImages) {
-            if (!entry) continue;
+        // Composicionar capas en orden respetando clipping masks
+        // Un grupo de recorte: capa base (clipping=false) + N capas encima (clipping=true)
+        let idx = 0;
+        while (idx < layerImages.length) {
+            const entry = layerImages[idx];
+            if (!entry) { idx++; continue; }
             const { img, lData } = entry;
-            if (lData.visible === false) continue;
-            fctx.save();
-            fctx.globalAlpha = (lData.opacity !== undefined) ? lData.opacity : 1.0;
-            fctx.globalCompositeOperation = lData.blend || 'source-over';
-            fctx.drawImage(img, 0, 0, w, h);
-            fctx.restore();
+
+            // Recolectar capas de recorte que vienen encima de esta
+            let groupEnd = idx + 1;
+            while (groupEnd < layerImages.length && layerImages[groupEnd] && layerImages[groupEnd].lData.clipping) {
+                groupEnd++;
+            }
+            const hasClipGroup = groupEnd > idx + 1;
+
+            if (!hasClipGroup) {
+                // Capa normal sin grupo de recorte
+                if (lData.visible !== false) {
+                    fctx.save();
+                    fctx.globalAlpha = (lData.opacity !== undefined) ? lData.opacity : 1.0;
+                    fctx.globalCompositeOperation = lData.blend || 'source-over';
+                    fctx.drawImage(img, 0, 0, w, h);
+                    fctx.restore();
+                }
+                idx++;
+            } else {
+                // Grupo de recorte: composicionar en un canvas temporal
+                const groupCanvas = document.createElement('canvas');
+                groupCanvas.width = w; groupCanvas.height = h;
+                const gctxFlat = groupCanvas.getContext('2d');
+
+                // 1. Pintar la capa base en el canvas de grupo
+                if (lData.visible !== false) {
+                    gctxFlat.save();
+                    gctxFlat.globalAlpha = (lData.opacity !== undefined) ? lData.opacity : 1.0;
+                    gctxFlat.globalCompositeOperation = lData.blend || 'source-over';
+                    gctxFlat.drawImage(img, 0, 0, w, h);
+                    gctxFlat.restore();
+                }
+
+                // 2. Para cada capa de recorte encima, pintarla recortada a la base
+                for (let k = idx + 1; k < groupEnd; k++) {
+                    const ce = layerImages[k];
+                    if (!ce || ce.lData.visible === false) continue;
+                    // Canvas temporal para esta capa de recorte
+                    const clipCanvas = document.createElement('canvas');
+                    clipCanvas.width = w; clipCanvas.height = h;
+                    const cctx = clipCanvas.getContext('2d');
+
+                    // a) Pintar la base en el temporal (para servir de máscara)
+                    cctx.drawImage(groupCanvas, 0, 0);
+
+                    // b) Aplicar la capa de recorte restringida a la silueta de la base
+                    cctx.save();
+                    cctx.globalAlpha = (ce.lData.opacity !== undefined) ? ce.lData.opacity : 1.0;
+                    cctx.globalCompositeOperation = 'source-atop'; // recorta al alpha de la base
+                    cctx.drawImage(ce.img, 0, 0, w, h);
+                    cctx.restore();
+
+                    // c) Copiar el resultado de vuelta al canvas de grupo
+                    gctxFlat.clearRect(0, 0, w, h);
+                    gctxFlat.drawImage(clipCanvas, 0, 0);
+                }
+
+                // 3. Estampar el grupo compuesto sobre el flat final
+                fctx.save();
+                fctx.globalCompositeOperation = 'source-over';
+                fctx.globalAlpha = 1.0;
+                fctx.drawImage(groupCanvas, 0, 0);
+                fctx.restore();
+
+                idx = groupEnd;
+            }
         }
 
         return { canvas: flat, title: project.title || 'proyecto' };

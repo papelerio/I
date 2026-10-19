@@ -50,6 +50,7 @@ function captureHistoryState() {
 /** Push a new history entry (call BEFORE or AFTER an action — see usage) */
 function pushHistory() {
     if (_historyPaused) return;
+    hasUnsavedChanges = true;
     // Truncate redo branch
     if (historyIndex < historyStack.length - 1) {
         historyStack.splice(historyIndex + 1);

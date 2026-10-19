@@ -378,14 +378,15 @@ function renderMenuList(cont, data, type) {
         const card = document.createElement('div');
         
         let isActive = false;
+        const effectiveTool = (typeof pendingToolAfterPan !== 'undefined' && pendingToolAfterPan) ? pendingToolAfterPan.id : currentTool;
         if (type === 'brush') {
             if (item.isPush) {
-                isActive = (currentTool === 'push');
+                isActive = (effectiveTool === 'push');
             } else {
-                isActive = (currentTool === 'pincel' && currentBrush && (currentBrush.id === item.id || (item.displayName === 'Lazos de Dibujo' && currentBrush.isLasso)));
+                isActive = (effectiveTool === 'pincel' && currentBrush && (currentBrush.id === item.id || (item.displayName === 'Lazos de Dibujo' && currentBrush.isLasso)));
             }
         } else {
-            isActive = (currentTool === item.id || (item.displayName === 'Lazos de Selección' && (currentTool === 'lazo-sel' || currentTool === 'lazo-des')));
+            isActive = (effectiveTool === item.id || (item.displayName === 'Lazos de Selección' && (effectiveTool === 'lazo-sel' || effectiveTool === 'lazo-des')));
         }
         
         card.className = 'grid-item-card' + (isActive ? ' active' : '');

@@ -41,6 +41,22 @@ function syncBrushUI() {
 }
 
 function selectTool(id, name) {
+    if (!name) {
+        const t = toolsData.find(x => x.id === id);
+        if (t) name = t.name;
+        else {
+            const b = brushTypesData.find(x => x.id === id);
+            if (b) name = b.name;
+        }
+    }
+
+    if (isPanDragging) {
+        pendingToolAfterPan = { id, name: name || id };
+        if (activeToolIndicator) activeToolIndicator.textContent = name || id;
+        if (typeof setupMultiToolMenu === 'function') setupMultiToolMenu();
+        if (typeof setupBrushMenu === 'function') setupBrushMenu();
+        return;
+    }
     if (activeFilterType) {
         if (id !== 'zoom' && id !== 'pan') return; // Only allow zoom/pan
         chromaLassoMode = 'none'; // Disable lasso when navigating

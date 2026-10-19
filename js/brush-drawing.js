@@ -58,13 +58,13 @@ function drawPoint(x, y, pressure) {
     let size = baseBrushSize * (minScale + curvedPressure * (maxScale - minScale));
     let localOpacity = brushOpacity;
 
-    if (currentBrush.isGaussBlur) {
+    if (currentBrush.isGaussBlur || currentBrush.isPixel) {
         size = baseBrushSize;
         localOpacity = brushOpacity;
     }
 
     // Velocity size modulation
-    if (velocitySensitivity > 0 && !currentBrush.isGaussBlur) {
+    if (velocitySensitivity > 0 && !currentBrush.isGaussBlur && !currentBrush.isPixel) {
         // Sqrt curve: smooth transitions, avoids harsh jumps at low speeds
         const normalised = Math.min(1.0, Math.sqrt(lastPointerSpeed / 2.5));
         // 'slow' mode: slow→thick (default). 'fast' mode: fast→thick (inverted)
@@ -249,6 +249,7 @@ function drawPoint(x, y, pressure) {
     else {
         const isHardSolid = !currentBrush.useTexture && !currentBrush.isBlur && !currentBrush.isSmudge && currentBrush.hardness >= 0.8 && !currentBrush.isLasso && !currentBrush.isShape;
         if (isHardSolid) {
+
             const ctx = (currentBrush.useCompositing || isPostStrokePreview) ? sctx : l.ctx;
             ctx.save();
             if (currentBrush.isEraser && !currentBrush.useCompositing && !isPostStrokePreview) ctx.globalCompositeOperation = 'destination-out';
@@ -259,8 +260,10 @@ function drawPoint(x, y, pressure) {
             ctx.beginPath();
             if (currentBrush.isPixel) {
                 const pSize = Math.max(1, Math.round(size * 2));
-                const px = Math.floor(x - pSize / 2);
-                const py = Math.floor(y - pSize / 2);
+                const centerCol = Math.floor(x);
+                const centerRow = Math.floor(y);
+                const px = centerCol - Math.floor((pSize - 1) / 2);
+                const py = centerRow - Math.floor((pSize - 1) / 2);
                 ctx.fillRect(px, py, pSize, pSize);
             } else {
                 ctx.arc(x, y, size, 0, Math.PI * 2);

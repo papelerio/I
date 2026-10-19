@@ -98,8 +98,13 @@ function renderStamp(tctx, x, y, size, alpha) {
         tctx.restore();
     }
     else if (currentBrush.isPixel) {
+        const pSize = Math.max(1, Math.round(baseBrushSize * 2));
+        const centerCol = Math.floor(x);
+        const centerRow = Math.floor(y);
+        const px = centerCol - Math.floor((pSize - 1) / 2);
+        const py = centerRow - Math.floor((pSize - 1) / 2);
         tctx.fillStyle = hexToRgba(selectedColor, alpha);
-        tctx.fillRect(x - size, y - size, size * 2, size * 2);
+        tctx.fillRect(px, py, pSize, pSize);
     }
     else { const g = tctx.createRadialGradient(x, y, size * currentBrush.hardness, x, y, size); g.addColorStop(0, hexToRgba(selectedColor, alpha)); g.addColorStop(1, hexToRgba(selectedColor, 0)); tctx.fillStyle = g; tctx.beginPath(); tctx.arc(x, y, size, 0, Math.PI * 2); tctx.fill(); }
 }
@@ -136,15 +141,18 @@ function drawStabLineTo(sx, sy, sp, ex, ey, ep) {
         const maxScale = 1.0 + (1.5 * pressureSensitivity);
         let size = baseBrushSize * (minScale + curvedPressure * (maxScale - minScale));
         // Velocity size modulation
-        if (velocitySensitivity > 0) {
+        if (velocitySensitivity > 0 && !currentBrush.isPixel) {
             const normalised = Math.min(1.0, Math.sqrt(lastPointerSpeed / 2.5));
             const factor = velocityMode === 'slow'
                 ? (1.0 - velocitySensitivity * normalised * 0.82)
                 : (1.0 - velocitySensitivity * (1.0 - normalised) * 0.82);
             size *= Math.max(0.05, factor);
         }
+        if (currentBrush.isPixel) size = baseBrushSize;
         size = Math.max(0.05, size);
         if (size <= 0) return;
+
+
         const l = layers[selectedLayerIndex];
         const ctx = (currentBrush.useCompositing || isPostStrokePreview) ? sctx : l.ctx;
         
@@ -158,12 +166,18 @@ function drawStabLineTo(sx, sy, sp, ex, ey, ep) {
         if (currentBrush.isPixel) {
             const pSize = Math.max(1, Math.round(size * 2));
             const dist = Math.hypot(ex - sx, ey - sy);
-            const steps = Math.max(1, Math.ceil(dist / 0.5));
+            const vScale = (typeof viewScale !== 'undefined' && viewScale > 0) ? viewScale : 1;
+            const minStep = Math.max(0.5, 0.75 / vScale);
+            const steps = Math.max(1, Math.ceil(dist / minStep));
             ctx.fillStyle = selectedColor;
             for (let i = 0; i <= steps; i++) {
                 const t = i / steps;
-                const px = Math.floor(sx + (ex - sx) * t - pSize / 2);
-                const py = Math.floor(sy + (ey - sy) * t - pSize / 2);
+                const curX = sx + (ex - sx) * t;
+                const curY = sy + (ey - sy) * t;
+                const centerCol = Math.floor(curX);
+                const centerRow = Math.floor(curY);
+                const px = centerCol - Math.floor((pSize - 1) / 2);
+                const py = centerRow - Math.floor((pSize - 1) / 2);
                 ctx.fillRect(px, py, pSize, pSize);
             }
             ctx.restore();
@@ -184,7 +198,10 @@ function drawStabLineTo(sx, sy, sp, ex, ey, ep) {
     }
 
     const dist = Math.hypot(ex - sx, ey - sy);
-    const step = Math.max(0.2, baseBrushSize * 0.5 * brushSpacing);
+    const vScale = (typeof viewScale !== 'undefined' && viewScale > 0) ? viewScale : 1;
+    // Adapt step density to screen visibility: avoids calculating thousands of invisible micro-stamps when zoomed out
+    const screenStepMin = Math.max(0.2, 0.75 / vScale);
+    const step = Math.max(screenStepMin, baseBrushSize * 0.5 * brushSpacing);
     const steps = Math.floor(dist / step);
     for (let i = 0; i <= steps; i++) {
         const t = steps === 0 ? 1 : i / steps;
@@ -200,7 +217,15 @@ function hexToRgba(hex, alpha) { const r = parseInt(hex.slice(1, 3), 16), g = pa
 //  RENDER LOOP
 // ─────────────────────────────────────────────────────────────
 function drawLayerContent(targetCtx, layerObj) {
-    targetCtx.drawImage(layerObj.canvas, 0, 0);
+    if (layerObj.canvas) targetCtx.drawImage(layerObj.canvas, 0, 0);
+
+    // Renderizar baldosas persistentes de la capa si existen
+    if (layerObj.tiles && layerObj.tiles.size > 0) {
+        for (const tile of layerObj.tiles.values()) {
+            targetCtx.drawImage(tile.canvas, tile.col * TILE_SIZE, tile.row * TILE_SIZE);
+        }
+    }
+
     if (currentTool === 'modify-sel' && modSelInitialized && !isImportingNewImage) {
         const tItem = modSelLayersData.find(x => x.layer === layerObj);
         if (tItem) {

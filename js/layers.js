@@ -21,7 +21,7 @@ function addLayer(name, fromCanvas = false) {
         // Flatten all layers respecting clipping mask groups
         compositeLayers(lCtx);
     }
-    const newLayer = { id: Date.now(), name, canvas: lCanvas, ctx: lCtx, visible: true, opacity: 1.0, thumbData: '', alphaLocked: false, clippingMask: false, blendMode: 'source-over' };
+    const newLayer = { id: Date.now(), name, canvas: lCanvas, ctx: lCtx, tiles: new Map(), visible: true, opacity: 1.0, thumbData: '', alphaLocked: false, clippingMask: false, blendMode: 'source-over' };
     if (layers.length === 0) { layers.push(newLayer); selectedLayerIndex = 0; }
     else { layers.splice(selectedLayerIndex + 1, 0, newLayer); selectedLayerIndex++; }
     layersCacheDirty = true;
@@ -166,7 +166,14 @@ function updateThumbnails() {
         thumbCanvas.width = 40;
         thumbCanvas.height = 30;
         const tctx = thumbCanvas.getContext('2d');
-        tctx.drawImage(l.canvas, 0, 0, 40, 30);
+        if (l.canvas) tctx.drawImage(l.canvas, 0, 0, 40, 30);
+        if (l.tiles && l.tiles.size > 0) {
+            const scaleX = 40 / paperWidth;
+            const scaleY = 30 / paperHeight;
+            for (const tile of l.tiles.values()) {
+                tctx.drawImage(tile.canvas, tile.col * TILE_SIZE * scaleX, tile.row * TILE_SIZE * scaleY, TILE_SIZE * scaleX, TILE_SIZE * scaleY);
+            }
+        }
         l.thumbData = thumbCanvas.toDataURL('image/webp', 0.85);
     });
 }

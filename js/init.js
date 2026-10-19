@@ -687,6 +687,14 @@ function init() {
     initPalette(); loadShortcuts(); setupMultiToolMenu(); setupBrushMenu();
     if (typeof updateTopSubtoolBar === 'function') updateTopSubtoolBar();
     applyCursor(false);
+
+    // ── Aviso al cerrar/recargar la pestaña con cambios sin guardar ──────────
+    window.addEventListener('beforeunload', (e) => {
+        if (hasUnsavedChanges) {
+            e.preventDefault();
+            e.returnValue = ''; // Necesario para Chrome/Edge
+        }
+    });
 }
 
 updateTintedTexture();

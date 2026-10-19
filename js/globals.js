@@ -89,10 +89,10 @@ let isDraggingLayer = false; // true while an internal layer drag-and-drop is in
 // Logical Canvas Size
 let paperWidth = 1920; let paperHeight = 1080;
 
-// Canvas Buffers
-const strokeCanvas = document.createElement('canvas'); const sctx = strokeCanvas.getContext('2d', { willReadFrequently: true });
-const groupCanvas = document.createElement('canvas'); const gctx = groupCanvas.getContext('2d', { willReadFrequently: true });
-const maskBuffer = document.createElement('canvas'); const mctx = maskBuffer.getContext('2d', { willReadFrequently: true });
+// Canvas Buffers (GPU Accelerated)
+const strokeCanvas = document.createElement('canvas'); const sctx = strokeCanvas.getContext('2d');
+const groupCanvas = document.createElement('canvas'); const gctx = groupCanvas.getContext('2d');
+const maskBuffer = document.createElement('canvas'); const mctx = maskBuffer.getContext('2d');
 const selectionOutlineCanvas = document.createElement('canvas'); const selectionOutlineCtx = selectionOutlineCanvas.getContext('2d');
 
 // Composite Cache Canvas (Option B)
@@ -261,6 +261,9 @@ let stabOutX = null, stabOutY = null, stabOutP = null;
 let isSpacePressed = false;
 let isTemporaryPan = false;
 let prevTemporaryTool = null; // Almacena el id de herramienta antes del pan temporal
+let isPanDragging = false;       // true mientras se mantiene presionado el click en una acción de paneo
+let pendingToolAfterPan = null;  // herramienta en espera de ser activada al soltar el click de paneo
+let hasUnsavedChanges = false;   // true cuando hay modificaciones en el lienzo sin guardar
 
 // Lasso/Bucket State
 let lassoPath = [];

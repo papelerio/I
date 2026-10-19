@@ -4,15 +4,16 @@ function render() {
     ctx.clearRect(0, 0, canvas.width, canvas.height); ctx.save();
     const isPixelBrush = currentBrush && currentBrush.isPixel;
     ctx.imageSmoothingEnabled = isPixelBrush ? false : imageSmoothing;
-    // Use fast (low-quality) interpolation while the user is actively zooming or using pixel brush,
-    // then switch back to high-quality once the zoom settles (~150 ms after last wheel event).
-    ctx.imageSmoothingQuality = (imageSmoothing && !isZooming && !isPixelBrush) ? 'high' : 'low';
+    // Use fast (low-quality) interpolation while zooming, when far zoomed out (viewScale < 0.75), or using pixel brush.
+    // This removes the heavy bicubic downsampling penalty on the GPU when viewing the full canvas.
+    const isFarZoom = viewScale < 0.75;
+    ctx.imageSmoothingQuality = (imageSmoothing && !isZooming && !isPixelBrush && !isFarZoom) ? 'high' : 'low';
     ctx.translate(canvas.width / 2 + viewPosX, canvas.height / 2 + viewPosY);
     ctx.rotate(viewRotation); ctx.scale(viewScale, viewScale);
     ctx.translate(-paperWidth / 2, -paperHeight / 2);
 
     // Paper bg
-    ctx.save(); ctx.shadowColor = 'rgba(0,0,0,0.5)'; ctx.shadowBlur = 40; ctx.shadowOffsetX = 10; ctx.shadowOffsetY = 20;
+    ctx.save();
     if (activeFilterType === 'chroma' && chromaDebugBG) {
         ctx.fillStyle = chromaDebugBG;
     } else {
@@ -20,7 +21,8 @@ function render() {
         else if (bgMode === 2) ctx.fillStyle = checkerPatternDark;
         else ctx.fillStyle = checkerPatternLight;
     }
-    ctx.fillRect(0, 0, paperWidth, paperHeight); ctx.restore();
+    ctx.fillRect(0, 0, paperWidth, paperHeight);
+    ctx.restore();
 
     // Layers
     let activeGroupStart = selectedLayerIndex;
@@ -470,25 +472,42 @@ function render() {
     if (cursorMode === 'always' || (cursorMode === 'auto' && !isDrawing)) {
         const isBrush = (currentTool === 'pincel' || currentTool === 'push');
         if (isBrush) {
-            const screenR = baseBrushSize * viewScale;
-            ctx.beginPath();
             if (currentBrush && currentBrush.isPixel) {
-                ctx.rect(screenCursorX - screenR, screenCursorY - screenR, screenR * 2, screenR * 2);
+                const world = screenToWorld(screenCursorX, screenCursorY);
+                const pSize = Math.max(1, Math.round(baseBrushSize * 2));
+                const centerCol = Math.floor(world.x);
+                const centerRow = Math.floor(world.y);
+                const px = centerCol - Math.floor((pSize - 1) / 2);
+                const py = centerRow - Math.floor((pSize - 1) / 2);
+
+                ctx.save();
+                ctx.translate(canvas.width / 2 + viewPosX, canvas.height / 2 + viewPosY);
+                ctx.rotate(viewRotation);
+                ctx.scale(viewScale, viewScale);
+                ctx.translate(-paperWidth / 2, -paperHeight / 2);
+
+                ctx.strokeStyle = 'rgba(255,255,255,0.8)';
+                ctx.lineWidth = 1.5 / viewScale;
+                ctx.strokeRect(px, py, pSize, pSize);
+
+                ctx.strokeStyle = 'rgba(0,0,0,0.3)';
+                ctx.lineWidth = 0.5 / viewScale;
+                ctx.strokeRect(px, py, pSize, pSize);
+
+                ctx.restore();
             } else {
+                const screenR = baseBrushSize * viewScale;
+                ctx.beginPath();
                 ctx.arc(screenCursorX, screenCursorY, screenR, 0, Math.PI * 2);
-            }
-            ctx.strokeStyle = 'rgba(255,255,255,0.6)';
-            ctx.lineWidth = 1.5;
-            ctx.stroke();
-            ctx.beginPath();
-            if (currentBrush && currentBrush.isPixel) {
-                ctx.rect(screenCursorX - screenR, screenCursorY - screenR, screenR * 2, screenR * 2);
-            } else {
+                ctx.strokeStyle = 'rgba(255,255,255,0.6)';
+                ctx.lineWidth = 1.5;
+                ctx.stroke();
+                ctx.beginPath();
                 ctx.arc(screenCursorX, screenCursorY, screenR, 0, Math.PI * 2);
+                ctx.strokeStyle = 'rgba(0,0,0,0.2)';
+                ctx.lineWidth = 0.5;
+                ctx.stroke();
             }
-            ctx.strokeStyle = 'rgba(0,0,0,0.2)';
-            ctx.lineWidth = 0.5;
-            ctx.stroke();
         }
         ctx.drawImage(customCursorImg, screenCursorX, screenCursorY);
     }

@@ -81,6 +81,13 @@ function handlePointerDown(e) {
         isTemporaryPan = false;
     }
 
+    if (currentTool === 'pan') {
+        isPanDragging = true;
+        pendingToolAfterPan = null;
+    } else {
+        isPanDragging = false;
+    }
+
     lastX = world.x; lastY = world.y;
     const rawP = (e.pressure === 0.5 && e.pointerType !== 'mouse') ? 0.1 : e.pressure || 0.1;
     lastPressure = rawP; smoothedPressure = rawP;
@@ -201,12 +208,12 @@ function handlePointerDown(e) {
             shapeStartX = world.x; shapeStartY = world.y;
             sctx.clearRect(0, 0, strokeCanvas.width, strokeCanvas.height);
         } else {
-            if (stabEnabled > 0 && stabMode === 'post' && !currentBrush.isLasso && !currentBrush.isShape && currentBrush.id !== 'push-brush' && !activeFilterType && !currentBrush.isGaussBlur && !currentBrush.isSmudge) {
+            if (stabEnabled > 0 && stabMode === 'post' && !currentBrush.isLasso && !currentBrush.isShape && currentBrush.id !== 'push-brush' && !activeFilterType && !currentBrush.isGaussBlur && !currentBrush.isSmudge && !currentBrush.isPixel) {
                 isPostStrokePreview = true;
                 rawStrokePath = [{ x: lastX, y: lastY, p: smoothedPressure }];
             }
 
-            if (stabEnabled > 0 && stabMode === 'realtime' && !currentBrush.isGaussBlur && !currentBrush.isSmudge) {
+            if (stabEnabled > 0 && stabMode === 'realtime' && !currentBrush.isGaussBlur && !currentBrush.isSmudge && !currentBrush.isPixel) {
                 stabPoints = [];
                 stabOutX = null; stabOutY = null; stabOutP = null;
                 stabPoints.push({ x: lastX, y: lastY, p: smoothedPressure });
@@ -297,7 +304,12 @@ function handlePointerMove(e) {
         return;
     }
 
-    if (currentTool === 'pan') { viewPosX += e.movementX; viewPosY += e.movementY; }
+    if (isPanDragging || currentTool === 'pan') {
+        viewPosX += e.movementX;
+        viewPosY += e.movementY;
+        requestRender();
+        return;
+    }
     else if (currentTool === 'push') {
         executePush(world.x, world.y, e.movementX / viewScale, e.movementY / viewScale);
     }
@@ -406,7 +418,7 @@ function handlePointerMove(e) {
                     stabOutX = sp.x; stabOutY = sp.y; stabOutP = sp.p;
                 }
             } else {
-                if (stabEnabled > 0 && stabMode === 'post' && !currentBrush.isGaussBlur && !currentBrush.isSmudge) {
+                if (stabEnabled > 0 && stabMode === 'post' && !currentBrush.isGaussBlur && !currentBrush.isSmudge && !currentBrush.isPixel) {
                     rawStrokePath.push({ x: cX, y: cY, p: smoothedPressure });
                 }
                 // Track pointer speed for velocity sensitivity
@@ -484,7 +496,7 @@ function handlePointerUp(e) {
             stabPoints = [];
         }
 
-        if (stabMode === 'post' && stabEnabled > 0 && rawStrokePath.length > 2 && isPostStrokePreview && !currentBrush.isGaussBlur && !currentBrush.isSmudge) {
+        if (stabMode === 'post' && stabEnabled > 0 && rawStrokePath.length > 2 && isPostStrokePreview && !currentBrush.isGaussBlur && !currentBrush.isSmudge && !currentBrush.isPixel) {
             sctx.clearRect(0, 0, strokeCanvas.width, strokeCanvas.height);
             isPostStrokePreview = false;
             
@@ -616,7 +628,8 @@ function handlePointerUp(e) {
             updateThumbnails(); updateLayersUI();
             pushHistory();
         } else if (currentBrush.useCompositing) {
-            const l = layers[selectedLayerIndex]; l.ctx.save(); l.ctx.globalAlpha = brushOpacity;
+            const l = layers[selectedLayerIndex];
+            l.ctx.save(); l.ctx.globalAlpha = brushOpacity;
             if (l.alphaLocked) l.ctx.globalCompositeOperation = 'source-atop';
 
             // Apply ghost layer blur if needed
@@ -684,7 +697,16 @@ function handlePointerUp(e) {
     }
 
     isDrawing = false; lassoPath = [];
-    if (currentTool === 'pan' && isTemporaryPan) {
+    const wasPanDragging = isPanDragging;
+    isPanDragging = false;
+
+    if (wasPanDragging && pendingToolAfterPan) {
+        const pending = pendingToolAfterPan;
+        pendingToolAfterPan = null;
+        isTemporaryPan = false;
+        prevTemporaryTool = null;
+        selectTool(pending.id, pending.name);
+    } else if (currentTool === 'pan' && isTemporaryPan) {
         if (activeFilterType) currentTool = 'none';
         else if (prevTemporaryTool) {
             // Restaurar directamente desde el id guardado (funciona con push, pincel, etc.)
