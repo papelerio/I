@@ -196,7 +196,27 @@ async function saveCurrentProject() {
 
     // Generate thumbnail preserving the real aspect ratio of the canvas
     const MAX_DIM = 800;
-    const flat = getFlatImage();
+    let flat;
+    if (typeof is360Mode !== 'undefined' && is360Mode && typeof layers360 !== 'undefined' && layers360.length > 0) {
+        // Modo 360°: generar miniatura desde el mapa equirectangular
+        const thumbRaw = document.createElement('canvas');
+        thumbRaw.width  = Math.min(800, MODE360.W);
+        thumbRaw.height = Math.min(400, MODE360.H);
+        const trawCtx = thumbRaw.getContext('2d');
+        if (bgMode === 1) { trawCtx.fillStyle = solidBgColor; trawCtx.fillRect(0, 0, thumbRaw.width, thumbRaw.height); }
+        for (const l of layers360) {
+            if (!l.visible) continue;
+            trawCtx.save();
+            trawCtx.globalAlpha = l.opacity;
+            trawCtx.globalCompositeOperation = l.blendMode;
+            trawCtx.drawImage(l.canvas, 0, 0, thumbRaw.width, thumbRaw.height);
+            trawCtx.restore();
+        }
+        flat = thumbRaw;
+    } else {
+        flat = getFlatImage();
+    }
+
     const ratio = flat.height / flat.width;
     let thumbW, thumbH;
     if (flat.width >= flat.height) {
@@ -246,6 +266,8 @@ async function saveCurrentProject() {
         solidBgColor: solidBgColor,
         projectType: projectType || 'illustration',
         isAnimationMode: !!isAnimationMode,
+        is360Mode: !!is360Mode,
+        data360: is360Mode ? serialize360() : null,
         currentFrameIndex: currentFrameIndex || 0,
         animationFPS: animationFPS || 12,
         animationFrames: isAnimationMode ? animationFrames.map(f => ({
@@ -301,6 +323,26 @@ async function loadProject(id) {
 
     projectType = project.projectType || 'illustration';
     isAnimationMode = !!project.isAnimationMode;
+    is360Mode = !!(project.is360Mode || projectType === '360');
+
+    // Restaurar modo 360° si aplica
+    if (is360Mode) {
+        if (project.data360) {
+            layers360 = [];
+            await deserialize360(project.data360);
+        } else {
+            layers360 = [];
+        }
+        initProject360();
+        // Ocultar galería / mostrar editor
+        document.getElementById('gallery-screen').classList.add('hidden');
+        mainApp.classList.remove('blur-content');
+        mainApp.style.pointerEvents = 'auto';
+        startProjectTimer();
+        toggleMenu(null);
+        hasUnsavedChanges = false;
+        return; // salir temprano, la UI la maneja el modo 360°
+    }
     animationFPS = project.animationFPS || 12;
     currentFrameIndex = project.currentFrameIndex || 0;
 
@@ -529,12 +571,21 @@ async function renderGallery() {
             }
 
             const isAnim = !!(p.isAnimationMode || p.projectType === 'animation' || (p.animationFrames && p.animationFrames.length > 0));
+            const is360  = !!(p.is360Mode || p.projectType === '360');
             if (isAnim) {
                 const badge = document.createElement('div');
                 badge.className = 'gallery-anim-badge';
                 badge.title = 'Proyecto de Animación';
                 badge.textContent = '🎞️';
                 thumbContainer.appendChild(badge);
+            }
+            if (is360) {
+                const badge360 = document.createElement('div');
+                badge360.className = 'gallery-anim-badge';
+                badge360.style.cssText += 'background:rgba(108,99,255,.85);right:30px;';
+                badge360.title = 'Proyecto 360°';
+                badge360.textContent = '🌐';
+                thumbContainer.appendChild(badge360);
             }
 
             const label = document.createElement('span');

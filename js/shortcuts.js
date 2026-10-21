@@ -2,8 +2,67 @@ function handleGlobalShortcuts(e) {
     const galleryScreen = document.getElementById('gallery-screen');
     if (galleryScreen && !galleryScreen.classList.contains('hidden')) return;
 
-    if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return;
+    if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT' || e.target.tagName === 'TEXTAREA') return;
     const key = e.key.toLowerCase();
+
+    // En modo 360°, ejecutamos los atajos que ya trae el programa para abrir pincel/borrador, menús y colores
+    if (typeof is360Mode !== 'undefined' && is360Mode) {
+        const bs = (brushShortcutInput?.value || '').toLowerCase();
+        const cs = (colorsShortcutInput?.value || '').toLowerCase();
+        const ms = (mainShortcutInput?.value || '').toLowerCase();
+
+        // Abrir/cerrar menú de pincel (donde están todos los pinceles y el borrador)
+        if (key === bs && bs !== '') { toggleMenu(brushTypeMenu); return; }
+        // Abrir/cerrar menú de herramientas
+        if (key === ms && ms !== '') { toggleMenu(multiToolMenu); return; }
+        // Abrir/cerrar menú de colores
+        if (key === cs && cs !== '') { toggleMenu(colorsMenu); return; }
+
+        // Atajos de selección de pincel o borrador (ej. 's' borrador, 'a' pincel duro, etc.)
+        const bt = brushTypesData.find(x => {
+            const k = (x.shortcut || '').toLowerCase();
+            if (!k || k !== key) return false;
+            const mod = x.modifier || 'normal';
+            if (mod === '+shift') return e.shiftKey && !e.ctrlKey;
+            if (mod === '+shift+ctrl') return e.shiftKey && e.ctrlKey;
+            return !e.shiftKey && !e.ctrlKey;
+        });
+        if (bt) {
+            selectTool('pincel', bt.name);
+            if (typeof _draw360Cursor === 'function') _draw360Cursor();
+            return;
+        }
+
+        // Atajo de herramienta Gotero (ej. 't')
+        const t = toolsData.find(x => {
+            const k = (x.shortcut || '').toLowerCase();
+            return k && k === key && !e.shiftKey && !e.ctrlKey && !e.altKey;
+        });
+        if (t && t.id === 'eyedropper') {
+            selectTool('eyedropper', t.name);
+            if (typeof _draw360Cursor === 'function') _draw360Cursor();
+            return;
+        }
+
+        // Atajos de paleta de colores
+        const pc = paletteColors.find(p => (p.s || '').toLowerCase() === key);
+        if (pc && pc.c) {
+            selectedColor = pc.c;
+            if (mainColorPicker) mainColorPicker.value = pc.c;
+            updateTintedTexture();
+            if (typeof _draw360Cursor === 'function') _draw360Cursor();
+            return;
+        }
+
+        // Guardar proyecto con Ctrl+S
+        if (e.ctrlKey && key === 's') {
+            e.preventDefault();
+            saveCurrentProject();
+            return;
+        }
+
+        return; // El resto de atajos específicos de lienzo 2D se omiten
+    }
 
     // Allow Zoom and Pan shortcuts during filters
     if (activeFilterType) {
@@ -93,6 +152,7 @@ function handleGlobalShortcuts(e) {
         e.preventDefault(); pasteFromClipboard(false); return;
     }
     if (e.ctrlKey && (key === 'z') && !e.shiftKey) { 
+        if (e.repeat) return;
         e.preventDefault(); 
         if (isModifyingShape) {
             isModifyingShape = false;
@@ -111,7 +171,12 @@ function handleGlobalShortcuts(e) {
         undo(); 
         return; 
     }
-    if (e.ctrlKey && (key === 'y' || (e.shiftKey && key === 'z'))) { e.preventDefault(); redo(); return; }
+    if (e.ctrlKey && (key === 'y' || (e.shiftKey && key === 'z'))) { 
+        if (e.repeat) return;
+        e.preventDefault(); 
+        redo(); 
+        return; 
+    }
 
     if (e.key === 'Enter' || e.key === 'Escape') {
         if (modSelInitialized) {

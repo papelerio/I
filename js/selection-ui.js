@@ -100,6 +100,7 @@ function updateEyedropperModeUI() {
     eyedropperModeBtn.textContent = eyedropperMode === 'original' ? '🎨 ORIGINAL' : '📷 CAPTURA';
     eyedropperModeBtn.style.background = eyedropperMode === 'original'
         ? 'rgba(0,180,80,0.75)' : 'rgba(0,0,0,0.55)';
+    if (typeof _sync360EyedropperUI === 'function') _sync360EyedropperUI();
 }
 
 function updateLassoFillModeUI() {

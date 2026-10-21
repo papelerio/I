@@ -179,6 +179,11 @@ function updateThumbnails() {
 }
 
 function updateLayersUI() {
+    // Delegate to 360-mode panel when in 360 mode
+    if (typeof is360Mode !== 'undefined' && is360Mode) {
+        if (typeof _360UpdateLayersUI === 'function') _360UpdateLayersUI();
+        return;
+    }
     if (!layersList) return;
 
     const posSpan = document.getElementById('layer-status-pos');

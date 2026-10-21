@@ -387,7 +387,8 @@ let currentFrameIndex = 0;
 let animationFPS = 12;
 let isAnimationPlaying = false;
 let animationInterval = null;
-let projectType = 'illustration'; // 'illustration' | 'animation'
+let projectType = 'illustration'; // 'illustration' | 'animation' | '360'
+let is360Mode = false;
 
 // Animation UI Elements
 const projectTypeSelect = document.getElementById('project-type-select');

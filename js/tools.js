@@ -177,6 +177,10 @@ function selectTool(id, name) {
     updateTopSubtoolBar();
 
     updateTintedTexture();
+
+    if (typeof is360Mode !== 'undefined' && is360Mode && typeof _draw360Cursor === 'function') {
+        _draw360Cursor();
+    }
 }
 
 // ─────────────────────────────────────────────────────────────

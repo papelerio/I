@@ -21,6 +21,7 @@ function startApp(w, h, initialImg = null) {
     const selectedType = (typeof projectTypeSelect !== 'undefined' && projectTypeSelect) ? projectTypeSelect.value : 'illustration';
     projectType = selectedType;
     isAnimationMode = (selectedType === 'animation');
+    is360Mode       = (selectedType === '360');
 
     // Set up new project state
     currentProjectId = 'proj_' + Date.now();
@@ -29,11 +30,17 @@ function startApp(w, h, initialImg = null) {
     
     const winW = canvas.parentElement.clientWidth; const winH = canvas.parentElement.clientHeight;
     viewScale = Math.min(winW / (paperWidth + 100), winH / (paperHeight + 100));
-    setupLogicalCanvas(initialImg);
 
-    if (isAnimationMode) {
+    if (is360Mode) {
+        // Modo 360°: inicializar overlay propio, canvas de paper secundario (solo de referencia)
+        setupLogicalCanvas();
+        layers360 = []; // reset
+        initProject360();
+    } else if (isAnimationMode) {
+        setupLogicalCanvas(initialImg);
         initAnimationProject();
     } else {
+        setupLogicalCanvas(initialImg);
         if (typeof updateAnimationUIState === 'function') {
             updateAnimationUIState(false);
         } else if (typeof animationBottomBar !== 'undefined' && animationBottomBar) {

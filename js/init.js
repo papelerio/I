@@ -489,7 +489,10 @@ function init() {
 
 
     const newLayerBtn = document.getElementById('new-layer-btn');
-    newLayerBtn.onclick = () => addLayer("Nueva Capa");
+    newLayerBtn.onclick = () => {
+        if (typeof is360Mode !== 'undefined' && is360Mode) { if (typeof add360Layer === 'function') add360Layer(); return; }
+        addLayer("Nueva Capa");
+    };
     newLayerBtn.addEventListener('contextmenu', (e) => {
         e.preventDefault();
         const k = prompt('Ingresa 1 tecla para el atajo "Nueva Capa", o deja vacío para eliminar:', newLayerShortcut);
@@ -537,6 +540,7 @@ function init() {
         });
     }
     window._syncQuickLayerBtns = function () {
+        if (typeof is360Mode !== 'undefined' && is360Mode) return; // 360 mode has no alpha/clip quick buttons
         const l = layers[selectedLayerIndex];
         if (!l) return;
         const BASE = 'padding:3px 10px; border-radius:12px; font-size:10px; font-weight:bold; cursor:pointer; transition:all 0.2s; white-space:nowrap; backdrop-filter:blur(5px);';
@@ -544,7 +548,10 @@ function init() {
         if (qClip) qClip.style.cssText = BASE + (l.clippingMask ? ACTIVE_STYLE : IDLE_STYLE);
         if (qMerge) qMerge.style.cssText = BASE + IDLE_STYLE;
     };
-    document.getElementById('duplicate-layer-btn').onclick = duplicateSelectedLayer;
+    document.getElementById('duplicate-layer-btn').onclick = () => {
+        if (typeof is360Mode !== 'undefined' && is360Mode) { if (typeof duplicate360Layer === 'function') duplicate360Layer(); return; }
+        duplicateSelectedLayer();
+    };
     document.getElementById('import-layer-btn').onclick = () => {
         if (layerImportState === 0) {
             layerImportState = 1;
@@ -555,7 +562,10 @@ function init() {
             fileInput.click();
         }
     };
-    document.getElementById('insert-layer-btn').onclick = () => addLayer("Capa desde lienzo", true);
+    document.getElementById('insert-layer-btn').onclick = () => {
+        if (typeof is360Mode !== 'undefined' && is360Mode) return; // not applicable in 360 mode
+        addLayer("Capa desde lienzo", true);
+    };
 
     const toggleBgBtn = document.getElementById('toggle-bg-btn');
     toggleBgBtn.onclick = toggleBackground;
@@ -641,6 +651,7 @@ function init() {
         cursorMode = cursorMode === 'always' ? 'auto' : 'always';
         document.getElementById('cursor-mode-value').textContent = cursorMode === 'always' ? 'SIEMPRE VISIBLE' : 'AUTOMÁTICO';
         applyCursor(false);
+        if (typeof _draw360Cursor === 'function' && typeof is360Mode !== 'undefined' && is360Mode) _draw360Cursor();
     };
     document.getElementById('toggle-smoothing').onclick = (e) => {
         imageSmoothing = !imageSmoothing;
